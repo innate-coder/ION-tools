@@ -1,0 +1,221 @@
+- name: CBAM-Terminate
+  hosts: oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance
+  connection: local
+  gather_facts: False
+  serial: 1
+
+  vars:
+    ansible_ssh_user: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+    ansible_ssh_pass: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+    sessionDeletionRate: "{{ vnf_context_data.vnf_attributes.extensions.sessionDeletionRate }}"
+    oamActiveVirtualIp: "{{ vnf_context_data.vnf_attributes.extensions.oamActiveVirtualIp }}"
+    cli:
+      host: "{{ ansible_ssh_host }}"
+      username: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+      password: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+      transport: cli
+      timeout: 300
+
+  pre_tasks:
+    - name: Update sessionDeletionRate if value is not the default one
+      set_fact:
+        sessionDeletionRate: "{{ vnf_context_data.operation_params.additionalParams.sessionDeletionRate }}"
+      when: '"{{ vnf_context_data.operation_params.additionalParams.sessionDeletionRate }}" != "default" and "{{ vnf_context_data.operation_params.terminationType }}" == "graceful"'
+
+    - name: Fail operation if sessionDeletionRate is not inside the expected range
+      fail: msg="sessionDeletionRate value is not inside the expected range"
+      register: session_deletion_rate_check
+      failed_when: '{{ sessionDeletionRate }} < 2 or {{ sessionDeletionRate }} > 2048'
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful"'
+
+    - name: Set OAM active virtual IP as current ansible host
+      set_fact:
+        ansible_ssh_host: "{{ oamActiveVirtualIp }}"
+      when: oamActiveVirtualIp != ""
+
+    - local_action:
+        module: wait_for
+          host={{ ansible_ssh_host }}
+          port=22
+          timeout=500
+          state=started
+      become: no
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful"'
+
+  tasks:
+    - name: Execute command for displaying gateway ids
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - show mobile-gateway system | match expression "Gateway.*Instance-type"
+      register: mgsystem_gateway
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful"'
+
+    - name: Get the current configured PDN IDs
+      delegate_to: localhost
+      raw: echo "{{ item }}" | cut -d ":" -f2 | awk '{print $1}'
+      with_items:
+        - "{{ mgsystem_gateway.stdout | list }}"
+      register: configured_pdn
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful"'
+
+    - name: Suspend mobile gateway PDN
+      sros_config:
+        provider: "{{ cli }}"
+        lines:
+          - configure mobile-gateway pdn {{ item }} suspend
+        timeout: 300
+      with_items:
+        - "{{ configured_pdn.results[0].stdout_lines }}"
+      register: suspend_pdn
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful"'
+
+    - name: Retrieve the current number of remaining sessions for the relevant PDN(s) before clear action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context gateway {{ item }} | match "Number of PDN instances :"
+      with_items:
+        - "{{ configured_pdn.results[0].stdout_lines }}"
+      ignore_errors: yes
+      register: retrieve_numsessions_clear
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful"'
+
+    - name: Parse number of sessions from previous output before clear action
+      raw: if [ "{{ item.stdout[0] }}" == "" ]; then echo "0"; else echo "{{ item.stdout[0] }}" | cut -d":" -f2 | awk '{print $1}'; fi
+      delegate_to: localhost
+      register: parse_numsessions_clear
+      ignore_errors: yes
+      with_items:
+        - "{{ retrieve_numsessions_clear.results }}"
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful"'
+
+    - name: Calculate waiting time based on current remaining sessions and configurable session deletion rate before clear action
+      raw: if [ "{{ item.stdout_lines | join ('\n') }}" == "0" ]; then echo "skip"; else printf %.f $(echo "(({{ item.stdout_lines | join ('\n') }} / {{ sessionDeletionRate }} + 30) / 10)" | bc -l); fi
+      delegate_to: localhost
+      register: get_waiting_time_clear
+      ignore_errors: yes
+      with_items:
+        - "{{ parse_numsessions_clear.results }}"
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful"'
+
+    - name: Clear all the remaining sessions
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - clear mobile-gateway pdn {{ item[1] }} bearer-context session-deletion-rate {{ sessionDeletionRate }}
+      with_together:
+        - "{{ get_waiting_time_clear.results }}"
+        - "{{ configured_pdn.results[0].stdout_lines }}"
+      ignore_errors: yes
+      register: clear_sessions
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful" and item[0].stdout_lines | join ("\n") != "skip"'
+
+    - name: Check current number of sessions per group in parallel after clear action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "{{ item[0].stdout_lines | join ('\n') }}"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context gateway {{ item[1] }}
+        wait_for:
+          - result[0] contains "No Matching Entries"
+      with_together:
+        - "{{ get_waiting_time_clear.results }}"
+        - "{{ configured_pdn.results[0].stdout_lines }}"
+      async: 8000000
+      poll: 0
+      ignore_errors: yes
+      register: check_sessions_clear
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful" and item[0].stdout_lines | join ("\n") != "skip"'
+
+    - name: Wait an amount of time after clear action and proceed when sessions are cleared
+      async_status:
+        jid: "{{ item[0].ansible_job_id }}"
+      register: wait_after_clear
+      retries: 800000
+      delay: 10
+      until: wait_after_clear.finished
+      ignore_errors: yes
+      with_together:
+        - "{{ check_sessions_clear.results }}"
+        - "{{ get_waiting_time_clear.results }}"
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful" and item[1].stdout_lines | join ("\n") != "skip"'
+
+    - name: Retrieve the current number of remaining sessions for the relevant PDN(s) before shutdown action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context gateway {{ item }} | match "Number of PDN instances :"
+      with_items:
+        - "{{ configured_pdn.results[0].stdout_lines }}"
+      ignore_errors: yes
+      register: retrieve_numsessions_shutdown
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful" and wait_after_clear is failed'
+
+    - name: Parse number of sessions from previous output before shutdown action
+      raw: if [ "{{ item.stdout[0] }}" == "" ]; then echo "0"; else echo "{{ item.stdout[0] }}" | cut -d":" -f2 | awk '{print $1}'; fi
+      delegate_to: localhost
+      register: parse_numsessions_shutdown
+      ignore_errors: yes
+      with_items:
+        - "{{ retrieve_numsessions_shutdown.results }}"
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful" and wait_after_clear is failed'
+
+    - name: Shutdown mobile gateway PDN(s)
+      sros_config:
+        provider: "{{ cli }}"
+        lines:
+          - configure mobile-gateway pdn {{ item[0] }} shutdown
+        timeout: 300
+      with_together:
+        - "{{ configured_pdn.results[0].stdout_lines }}"
+        - "{{ parse_numsessions_shutdown.results }}"
+      ignore_errors: yes
+      register: shutdown_pdn
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful" and wait_after_clear is failed and item[1].stdout_lines | join ("\n") != "0"'
+
+    - name: Check current number of sessions per group in parallel after shutdown action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "3"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context gateway {{ item[0] }}
+        wait_for:
+          - result[0] contains "No Matching Entries"
+      with_together:
+        - "{{ configured_pdn.results[0].stdout_lines }}"
+        - "{{ parse_numsessions_shutdown.results }}"
+      async: 1000
+      poll: 0
+      ignore_errors: yes
+      register: check_sessions_shutdown
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful" and wait_after_clear is failed and item[1].stdout_lines | join ("\n") != "0"'
+
+    - name: Wait an amount of time after shutdown action and proceed when sessions are cleared
+      async_status:
+        jid: "{{ item[0].ansible_job_id }}"
+      register: wait_after_shutdown
+      retries: 100
+      delay: 10
+      until: wait_after_shutdown.finished
+      ignore_errors: yes
+      with_together:
+        - "{{ check_sessions_shutdown.results }}"
+        - "{{ parse_numsessions_shutdown.results }}"
+      when: '"{{ vnf_context_data.operation_params.terminationType }}" == "graceful" and wait_after_clear is failed and item[1].stdout_lines | join ("\n") != "0"'

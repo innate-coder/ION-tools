@@ -1,0 +1,100 @@
+- name: CBAM-OAM
+  hosts: oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance
+  connection: local
+  gather_facts: False
+  serial: 1
+
+  vars:
+    resources: "{{ vnf_context_data.stack_params.cbam.resources }}"
+    slotIdsToCheck: "{{ vnf_context_data.stack_params.cbam.resources.slotIdAnsible }}"
+    ansible_ssh_user: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+    ansible_ssh_pass: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+    oamActiveVirtualIp: "{{ vnf_context_data.vnf_attributes.extensions.oamActiveVirtualIp }}"
+    cli:
+      host: "{{ ansible_ssh_host }}"
+      username: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+      password: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+      transport: cli
+      timeout: 300
+
+  pre_tasks:
+    - name: Set OAM active virtual IP as current ansible host
+      set_fact:
+        ansible_ssh_host: "{{ oamActiveVirtualIp }}"
+      when: oamActiveVirtualIp != ""
+
+    - local_action:
+        module: wait_for
+          host={{ ansible_ssh_host }}
+          port=22
+          timeout=500
+          state=started
+      become: no
+
+  tasks:
+    - name: Verify that license status is displayed for both active and standby CPM
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "20"
+        interval: "10"
+        commands:
+          - show system license | match expression post-lines 5 "Active.*License"
+          - show system license | match expression post-lines 5 "Standby.*License"
+        wait_for:
+          - result[0] contains "Active"
+          - result[0] contains "License status"
+          - result[1] contains "Standby"
+          - result[1] contains "License status"
+      register: license_cpm
+
+    - name: Retrieve and verify that license status is valid
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "20"
+        interval: "10"
+        commands:
+          - show system license | match post-lines 5 "System"
+          - show system license | match post-lines 5 "CPM A"
+          - show system license | match post-lines 5 "CPM B"
+        wait_for:
+          - result[0] contains "valid license"
+          - result[1] contains "valid license"
+          - result[2] contains "valid license"
+      ignore_errors: yes
+      register: get_license_status
+
+    - name: Configure LB scaled cards during scale-out execution
+      sros_config:
+        timeout: 300
+        provider: "{{ cli }}"
+        lines:
+          - configure card {{ item }} card-type iom-v
+      with_items:
+        - "{{ slotIdsToCheck }}"
+      when: '"lbScaleOutOperation" in resources'
+
+    - name: Configure MG scaled cards during scale-out execution
+      sros_config:
+        timeout: 300
+        provider: "{{ cli }}"
+        lines:
+          - configure card {{ item }} card-type iom-v-mg
+      with_items:
+        - "{{ slotIdsToCheck }}"
+      when: '"mgScaleOutOperation" in resources'
+
+    - name: "Check slot ids {{ slotIdsToCheck }}"
+      when: get_license_status is not failed
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "400"
+        interval: "1"
+        commands:
+          - show card "{{ item }}"
+        wait_for:
+          - result[0] contains "up    up"
+      with_items:
+        - "{{ slotIdsToCheck }}"

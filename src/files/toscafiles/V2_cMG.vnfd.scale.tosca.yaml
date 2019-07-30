@@ -1,0 +1,718 @@
+tosca_definitions_version: tosca_simple_profile_for_nfv_1_0_0_nokia_3_4_0
+
+metadata:
+  vnfd_id: Nokia~Cloud_MG~10.0R11~10.7.4~sriov.0.3
+  vnfd_version: '10.7.4.sriov_v0.3'
+  vnf_product_name: Cloud MG
+  vnf_product_info_name: Cloud Mobile Gateway
+  vnf_provider: Nokia
+  vnf_software_version: '10.0R11'
+  vnfm_info: CBAM
+
+description: Cloud Mobile Gateway
+
+topology_template:
+  substitution_mappings:
+    node_type: tosca.nodes.nfv.VNF
+    properties:
+      descriptor_id: Nokia~Cloud_MG~10.0R11~10.7.4~sriov.0.3
+      descriptor_version: '10.7.4.sriov_v0.3'
+      provider: Nokia
+      product_name: Cloud MG
+      software_version: '10.0R11'
+      product_info_name: Cloud Mobile Gateway
+      product_info_description: Cloud Mobile Gateway
+      vnfm_info:
+        - CBAM
+    requirements:
+      - virtual_link: [ oamManagementECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt1ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt2ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt3ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt4ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt5ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt6ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt7ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt8ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt9ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt10ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt11ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt12ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt13ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt14ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt15ECP, external_virtual_link ]
+      - virtual_link: [ loadBalancerExt16ECP, external_virtual_link ]
+
+    capabilities:
+      deployment_flavour:
+        properties:
+          flavour_id: scalable
+          description: Scalable flavor of Cloud MG VNF
+          scaling_aspects:
+            loadBalancerAspect:
+              name: Load Balancer scaling aspect
+              description: The scaling aspect for LB VMs
+              associated_group: loadBalancerScalingGroup
+              max_scale_level: 8
+            mgRedundantAspect:
+              name: Mobile Gateway scaling aspect
+              description: The scaling aspect for MG VM groups
+              associated_group: mgRedundantScalingGroup
+              max_scale_level: 9
+          instantiation_levels:
+            minimum:
+              description: CMG minimum instantiation level
+              vdu_levels:
+                oamServer:
+                  number_of_instances: 1
+                loadBalancerServer:
+                  number_of_instances: 2
+                mgServer:
+                  number_of_instances: 1
+              scale_info:
+                mgRedundantAspect:
+                  scale_level: 1
+                loadBalancerAspect:
+                  scale_level: 2
+          default_instantiation_level_id: minimum
+          vdu_profile:
+            oamServer:
+              min_number_of_instances: 1
+              max_number_of_instances: 1
+            loadBalancerServer:
+              min_number_of_instances: 2
+              max_number_of_instances: 8
+            mgServer:
+              min_number_of_instances: 1
+              max_number_of_instances: 9
+
+      vnf:
+        properties:
+          modifiable_attributes:
+            extensions:
+              systemIpAddr:
+                default: "10.95.67.193"
+              staticRoute:
+                default: "static-route=0.0.0.0/0@10.95.67.229"
+              primaryConfigFile:
+                default: "cf3:\\config.cfg"
+              licenseFile:
+                default: "cf3:\\license.txt"
+              securityGroup:
+                default: "CPFSecurityGrp"
+              oamManagementNetmask:
+                default: "29"
+              dataSwitchFabric1Vlan:
+                default: "0"
+              dataSwitchFabric2Vlan:
+                default: "0"
+              oamCompactFlash1Size:
+                default: "256"
+              oamCompactFlash2Size:
+                default: "256"
+              externalIpAddressList:
+                default: "0.0.0.0/0,1.1.1.1"
+              csfFailureDetectionTimer:
+                default: "30"
+              hyperThreadingSupportValue:
+                default: "1"
+              controlPlaneCores:
+                default: "16"
+              compactFp:
+                default: "0"
+              multipleNicTasks:
+                default: "0"
+              snmpCommunity:
+                default: "private"
+              vnfHostname:
+                default: "INVIHR11AMB1SAEC01NK"
+              mtu:
+                default: "9000"
+              l3Connectivity:
+                default: "0"
+              controlSwitchFabricCidr:
+                default: "1.0.1.0/24"
+              controlSwitchFabricGatewayIp:
+                default: "1.0.1.1"
+              dataSwitchFabric1Cidr:
+                default: "1.0.2.0/24"
+              dataSwitchFabric2Cidr:
+                default: "1.0.3.0/24"
+              cupsMode:
+                default: true
+              scaleConfig:
+                default: false
+              oamUsername:
+                default: "admin"
+              oamPassword:
+                default: "admin"
+              oamActiveVirtualIp:
+                default: "10.95.67.227"
+              oamStandbyVirtualIp:
+                default: "10.95.67.228"
+              dataSwitchFabric1SubnetId:
+                default: "CMG1DFab1SubnetCPF"
+              dataSwitchFabric2SubnetId:
+                default: "CMG1DFab2SubnetCPF"
+              mgLbManagementCidr:
+                default: "1.0.4.0/24"
+              mgLbManagementGatewayIp:
+                default: "1.0.4.1"
+              oamACompactFlash1Id:
+               default: "644fd26d-6de3-47f4-bb98-03c9da8ae9e9"
+              oamACompactFlash2Id:
+               default: "4fa06899-a381-43c1-98fa-dd5decd0680b"
+              oamBCompactFlash1Id:
+               default: "eba98a18-ea5f-4d26-baa6-02827f36516b"
+              oamBCompactFlash2Id:
+               default: "778de580-45e8-4d3f-acc2-fe9cfd75cdf7"
+              vf2vf:
+                default: "0"
+              suspendTimer:
+                default: "10"
+              sessionDeletionRate:
+                default: "2048"
+              gracefulScaleIn:
+                default: false
+
+    interfaces:
+      Basic:
+        instantiate:
+           inputs:
+            extensions:
+              pre_actions:
+              - javascript: javascript/assignSlotIDs.js
+                output: stack_parameters
+              - javascript: javascript/assignZones.js
+                output: stack_parameters
+              - javascript: javascript/assignCpCoresAndCfp.js
+                output: stack_parameters
+              - javascript: javascript/generateSmbios.js
+                output: stack_parameters
+              post_actions:
+              - ansible: ansible/configureOam.yaml
+              - ansible: ansible/checkVmsUp.yaml
+
+        terminate:
+          inputs:
+            additional_parameters:
+              sessionDeletionRate: default
+            extensions:
+              pre_actions:
+              - ansible: ansible/gracefulTerminate.yaml
+
+      Scalable:
+        scale:
+          inputs:
+            additional_parameters:
+              cpCoreAllocation: default
+              upCompactFP: default
+              suspendTimer: default
+              sessionDeletionRate: default
+              vnfcToScaleIn: detect
+            extensions:
+              pre_actions:
+              - javascript: javascript/assignSlotIDs.js
+                output: stack_parameters
+              - javascript: javascript/assignZones.js
+                output: stack_parameters
+              - javascript: javascript/assignCpCoresAndCfp.js
+                output: stack_parameters
+              - javascript: javascript/generateSmbios.js
+                output: stack_parameters
+              - ansible: ansible/gracefulScaleIn.yaml
+              input_actions:
+              - javascript: javascript/vnfcToRemove.js
+                output: auxiliary_parameters
+              #post_actions:
+              #- ansible: ansible/checkVmsUp.yaml
+              #- ansible: ansible/configureScaling.yaml
+
+      Healable:
+        heal:
+           implementation: mistral-workbooks/cMGheal_workbook.yaml
+           inputs:
+             additional_parameters:
+               vnfcToHeal:
+
+      Custom:
+        upgrade:
+          implementation: mistral-workbooks/cMGupgrade_workbook.yaml
+        re-instantiate:
+          implementation: mistral-workbooks/cMGreinstantiate_workbook.yaml
+          inputs:
+            additional_parameters:
+              vnfcToReInstantiate:
+
+  node_templates:
+    oamServer:
+      type: tosca.nodes.nfv.VDU
+      properties:
+        description: OAM Server VDU
+        configurable_properties:
+          additional_vnfc_configurable_properties: {}
+      requirements:
+        - virtual_compute: oamCompute
+        - virtual_storage: compactFlash1
+        - virtual_storage: compactFlash2
+        - sw_image: cmgImage
+
+    loadBalancerServer:
+      type: tosca.nodes.nfv.VDU
+      properties:
+        description: Load Balancer Server VDU
+        configurable_properties:
+          additional_vnfc_configurable_properties: {}
+      requirements:
+        - virtual_compute: loadBalancerCompute
+        - sw_image: cmgImage
+
+    mgServer:
+      type: tosca.nodes.nfv.VDU
+      properties:
+        description: MG Working Server VDU
+        configurable_properties:
+          additional_vnfc_configurable_properties: {}
+      requirements:
+        - virtual_compute: mgCompute
+        - sw_image: cmgImage
+
+    oamCompute:
+      type: tosca.nodes.nfv.VirtualCompute
+      properties:
+        virtual_memory:
+            virtual_mem_size: 24576 MB
+        virtual_cpu:
+            cpu_architecture: x86
+            num_virtual_cpu: 16
+            virtual_cpu_clock: 2500 MHz
+
+    loadBalancerCompute:
+      type: tosca.nodes.nfv.VirtualCompute
+      properties:
+        virtual_memory:
+            virtual_mem_size: 32768 MB
+        virtual_cpu:
+            cpu_architecture: x86
+            num_virtual_cpu: 16
+            virtual_cpu_clock: 2500 MHz
+
+    mgCompute:
+      type: tosca.nodes.nfv.VirtualCompute
+      properties:
+        virtual_memory:
+            virtual_mem_size: 65536 MB
+        virtual_cpu:
+            cpu_architecture: x86
+            num_virtual_cpu: 18
+            virtual_cpu_clock: 2500 MHz
+
+    compactFlash1:
+      type: tosca.nodes.nfv.VirtualStorage
+      properties:
+        type_of_storage: volume
+        size_of_storage: 256 GB
+      requirements:
+
+    compactFlash2:
+      type: tosca.nodes.nfv.VirtualStorage
+      properties:
+        type_of_storage: volume
+        size_of_storage: 256 GB
+      requirements:
+
+    cmgImage:
+      type: tosca.nodes.nfv.SwImage
+      properties:
+        name: CMG Image
+        version: 10.0R11
+        sw_image: cmgVmImage
+        checksum: 6f71c886cc3a30f3949f66f85ba71b98
+        container_format: qcow2
+        disk_format: bare
+        min_disk: 2 GB
+        min_ram: 8096 MB
+        size: 2 GB
+        operating_system: SROS
+        supported_virtualisation_environments:
+          - KVM
+
+    controlSwitchFabricVL:
+      type: tosca.nodes.nfv.VL
+      properties:
+        connectivity_type:
+          layer_protocol: ipv4
+          flow_pattern: mesh
+        test_access: []
+        description: Control Switch Fabric Network Virtual Link
+        vl_flavours: {}
+
+    dataSwitchFabric1VL:
+      type: tosca.nodes.nfv.VL
+      properties:
+        connectivity_type:
+          layer_protocol: ipv4
+          flow_pattern: mesh
+        test_access: []
+        description: Data Switch fabric Network 1 Virtual Link
+        vl_flavours: {}
+
+    dataSwitchFabric2VL:
+      type: tosca.nodes.nfv.VL
+      properties:
+        connectivity_type:
+          layer_protocol: ipv4
+          flow_pattern: mesh
+        test_access: []
+        description: Data Switch fabric Network 2 Virtual Link
+        vl_flavours: {}
+
+    mgAndLoadBalancerManagementVL:
+      type: tosca.nodes.nfv.VL
+      properties:
+        connectivity_type:
+          layer_protocol: ipv4
+          flow_pattern: mesh
+        test_access: []
+        description: LoadBalancer Management Virtual Link
+        vl_flavours: {}
+
+    oamControlSwitchFabricICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for OAM Control Switch Fabric Network
+      requirements:
+        - virtual_binding: oamServer
+        - virtual_link: controlSwitchFabricVL
+
+    loadBalancerControlSwitchFabricICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for LoadBalancer Control Switch Fabric Network
+      requirements:
+        - virtual_binding: loadBalancerServer
+        - virtual_link: controlSwitchFabricVL
+
+    mgControlSwitchFabricICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for MG Control Switch Fabric Network
+      requirements:
+        - virtual_binding: mgServer
+        - virtual_link: controlSwitchFabricVL
+
+    mgDataSwitchFabric1ICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for MG Data Switch Fabric 1 Network
+      requirements:
+        - virtual_binding: mgServer
+        - virtual_link: dataSwitchFabric1VL
+
+    mgDataSwitchFabric2ICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for MG Data Switch Fabric 2 Network
+      requirements:
+        - virtual_binding: mgServer
+        - virtual_link: dataSwitchFabric2VL
+
+    loadBalancerDataSwitchFabric1ICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for LoadBalancer Data Switch Fabric 1 Network
+      requirements:
+        - virtual_binding: loadBalancerServer
+        - virtual_link: dataSwitchFabric1VL
+
+    loadBalancerDataSwitchFabric2ICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for LoadBalancer Data Switch Fabric 2 Network
+      requirements:
+        - virtual_binding: loadBalancerServer
+        - virtual_link: dataSwitchFabric2VL
+
+    oamManagementICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for OAM Management network
+      requirements:
+        - virtual_binding: oamServer
+
+    loadBalancerManagementICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for LoadBalancer Management Network
+      requirements:
+        - virtual_binding: loadBalancerServer
+        - virtual_link: mgAndLoadBalancerManagementVL
+
+    mgManagementICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for MG Management Network
+      requirements:
+        - virtual_binding: mgServer
+        - virtual_link: mgAndLoadBalancerManagementVL
+
+    dynamicLbExt1ICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for LoadBalancer External Networks
+      requirements:
+        - virtual_binding: loadBalancerServer
+
+    dynamicLbExt2ICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for LoadBalancer External Networks
+      requirements:
+        - virtual_binding: loadBalancerServer
+
+    oamManagementECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: oamManagementICP
+
+    loadBalancerExt1ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt1ICP
+
+    loadBalancerExt2ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt2ICP
+
+    loadBalancerExt3ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt1ICP
+
+    loadBalancerExt4ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt2ICP
+
+    loadBalancerExt5ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt1ICP
+
+    loadBalancerExt6ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt2ICP
+
+    loadBalancerExt7ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt1ICP
+
+    loadBalancerExt8ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt2ICP
+
+    loadBalancerExt9ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt1ICP
+
+    loadBalancerExt10ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt2ICP
+
+    loadBalancerExt11ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt1ICP
+
+    loadBalancerExt12ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt2ICP
+
+    loadBalancerExt13ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt1ICP
+
+    loadBalancerExt14ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt2ICP
+
+    loadBalancerExt15ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt1ICP
+
+    loadBalancerExt16ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicLbExt2ICP
+
+  groups:
+    loadBalancerScalingGroup:
+      type: tosca.groups.nfv.ElementGroup
+      description: Scaling group for LoadBalancer Server
+      members: [ loadBalancerServer ]
+    mgRedundantScalingGroup:
+      type: tosca.groups.nfv.ElementGroup
+      description: Scaling group for MG Working and Protect Server
+      members: [ mgServer ]
+
+  policies:
+    - mgServer_anti_affinity:
+        type: tosca.policies.nfv.ScalingStepLocalAntiAffinity
+        targets: [ mgServer ]
+        properties:
+          scope: nfvi_node
+    - oamServer_anti_affinity:
+        type: tosca.policies.nfv.LocalAntiAffinity
+        targets: [ oamServer ]
+        properties:
+          scope: nfvi_node
+    - loadBalancerServer_anti_affinity:
+        type: tosca.policies.nfv.LocalAntiAffinity
+        targets: [ loadBalancerServer ]
+        properties:
+          scope: nfvi_node
+    - commissioning:
+        type: tosca.policies.nfv.Commissioning
+        properties:
+          connection_points:
+            - oamManagementECP
+    - heat_mapping:
+        type: tosca.policies.nfv.HeatMapping
+        properties:
+          template:
+            hotPath: hot/
+            main: cMG.hot.yaml
+            nested:
+              - cMG_OAMStaticAspect.template.yaml
+              - cMG_OAMInstanceGroup.template.yaml
+              - cMG_OAM.template.yaml
+              - cMG_LBInstanceGroup.template.yaml
+              - cMG_LB.template.yaml
+              - cMG_MGScalingAspect.template.yaml
+              - cMG_MGInstanceGroup.template.yaml
+              - cMG_MG.template.yaml
+
+          static:
+            virtualLinks:
+              controlSwitchFabricVL: controlSwitchFabricNet
+              mgAndLoadBalancerManagementVL: mgAndLoadBalancerManagementNet
+            vdus:
+              oamServer:
+                - heatResource: oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance
+                  connectionPoints:
+                    oamControlSwitchFabricICP: oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamControlSwitchFabricPort
+                  externalConnectionPoints:
+                    oamManagementECP:
+                      - oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamManagementPort
+                 # virtualStorages:
+                 #   compactFlash1: oamACompactFlash1
+                 #   compactFlash2: oamACompactFlash2
+                - heatResource: oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamServerInstance
+                  connectionPoints:
+                    oamControlSwitchFabricICP: oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamControlSwitchFabricPort
+                  externalConnectionPoints:
+                    oamManagementECP:
+                      - oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamManagementPort
+                 #virtualStorages:
+                 #  compactFlash1: oamBCompactFlash1
+                 #  compactFlash2: oamBCompactFlash2
+
+          aspects:
+            loadBalancerAspect:
+              heatResource: loadBalancerAspectGroup
+              vdus:
+                loadBalancerServer:
+                  - heatResource: loadBalancerInstanceGroup.0.loadBalancerServerInstance
+                    connectionPoints:
+                      loadBalancerManagementICP: loadBalancerInstanceGroup.0.loadBalancerManagementPort
+                      loadBalancerControlSwitchFabricICP: loadBalancerInstanceGroup.0.loadBalancerControlSwitchFabricPort
+                      loadBalancerDataSwitchFabric1ICP: loadBalancerInstanceGroup.0.loadBalancerDataSwitchFabric1Port
+                      loadBalancerDataSwitchFabric2ICP: loadBalancerInstanceGroup.0.loadBalancerDataSwitchFabric2Port
+                      dynamicLbExt1ICP: loadBalancerInstanceGroup.0.loadBalancerExt1Port
+                      dynamicLbExt2ICP: loadBalancerInstanceGroup.0.loadBalancerExt2Port
+
+            mgRedundantAspect:
+              heatResource: mgRedundantAspectGroup
+              vdus:
+                mgServer:
+                  - heatResource: mgWorking.mgInstanceGroup.0.mgServerInstance
+                    connectionPoints:
+                      mgManagementICP: mgWorking.mgInstanceGroup.0.mgManagementPort
+                      mgControlSwitchFabricICP: mgWorking.mgInstanceGroup.0.mgControlSwitchFabricPort
+                      mgDataSwitchFabric1ICP: mgWorking.mgInstanceGroup.0.mgDataSwitchFabric1Port
+                      mgDataSwitchFabric2ICP: mgWorking.mgInstanceGroup.0.mgDataSwitchFabric2Port
+
+                  - heatResource: mgProtect.mgInstanceGroup.0.mgServerInstance
+                    connectionPoints:
+                      mgManagementICP: mgProtect.mgInstanceGroup.0.mgManagementPort
+                      mgControlSwitchFabricICP: mgProtect.mgInstanceGroup.0.mgControlSwitchFabricPort
+                      mgDataSwitchFabric1ICP: mgProtect.mgInstanceGroup.0.mgDataSwitchFabric1Port
+                      mgDataSwitchFabric2ICP: mgProtect.mgInstanceGroup.0.mgDataSwitchFabric2Port

@@ -1,0 +1,157 @@
+{
+    "apiVersion": "3.3",
+    "extensions":[
+    {
+         "name": "systemIpAddr",
+         "value": "$SytemIp"
+    },
+    {
+         "name": "staticRoute",
+         "value": "static-route=0.0.0.0/0@6.6.6.1"
+    },
+    {
+         "name": "primaryConfigFile",
+         "value": "ftp://*:*@6.6.6.1/regressbed/images/dut-a.cfg"
+    },
+    {
+         "name": "licenseFile",
+         "value": "ftp://*:*@6.6.6.1/regressbed/images/vmLICENSE/timos.vsr-all.txt"
+    },
+    {
+         "name": "securityGroup",
+         "value": "srGrp"
+    },
+    {
+         "name": "oamManagementNetmask",
+         "value": "24"
+    },
+    {
+         "name": "dataSwitchFabric1Vlan",
+         "value": "100"
+    },
+    {
+         "name": "dataSwitchFabric2Vlan",
+         "value": "200"
+    },
+    {
+         "name": "oamCompactFlash1Size",
+         "value": "2"
+    },
+    {
+         "name": "oamCompactFlash2Size",
+         "value": "2"
+    },
+    {
+         "name": "externalIpAddressList",
+         "value": "0.0.0.0/0"
+    },
+    {
+         "name": "csfFailureDetectionTimer",
+         "value": "100"
+    },
+    {
+         "name": "hyperThreadingSupportValue",
+         "value": "0"
+    },
+    {
+         "name": "controlPlaneCores",
+         "value": "4"
+    },
+    {
+         "name": "compactFp",
+         "value": "0"  
+    },
+    {
+         "name": "multipleNicTasks",
+         "value": "0"
+    },
+    {
+         "name": "snmpCommunity",
+         "value": "private"  
+    },
+    {
+         "name": "vnfHostname",
+         "value": "CloudMG"
+    },
+    {
+         "name": "mtu",
+         "value": "9000"
+    },
+    {
+         "name": "l3Connectivity",
+         "value": "0"
+    },
+    {
+         "name": "controlSwitchFabricCidr",
+         "value": "1.0.1.0/24"
+    },
+    {
+         "name": "controlSwitchFabricGatewayIp",
+         "value": "1.0.1.1"
+    },
+    {
+         "name": "dataSwitchFabric1Cidr",
+         "value": "1.0.3.0/24"
+    },
+    {
+         "name": "dataSwitchFabric2Cidr",
+         "value": "1.0.4.0/24"
+    },
+    {
+         "name": "cupsMode",
+         "value": false
+    },
+    {
+         "name": "scaleConfig",
+         "value": true
+    },
+    {
+         "name": "oamUsername",
+         "value": "admin"
+    },
+    {
+         "name": "oamPassword",
+         "value": "admin"
+    },
+    {
+         "name": "oamActiveVirtualIp",
+         "value": "15.227.17.40"
+    },
+    {
+         "name": "oamStandbyVirtualIp",
+         "value": "15.227.17.41"
+    },
+    {
+         "name": "dataSwitchFabric1SubnetId",
+         "value": "dataSwitchFabric1Subnet"
+    },
+    {
+         "name": "dataSwitchFabric2SubnetId",
+         "value": "dataSwitchFabric2Subnet"
+    },
+    {
+         "name": "mgLbManagementCidr",
+         "value": "1.0.2.0/24"
+    },
+    {
+         "name": "mgLbManagementGatewayIp",
+         "value": "1.0.2.1"
+    },
+    {
+         "name": "vf2vf",
+         "value": "0"
+    },
+    {
+         "name": "suspendTimer",
+         "value": "10"
+    },
+    {
+         "name": "sessionDeletionRate",
+         "value": "2048"
+    },
+    {
+         "name": "gracefulScaleIn",
+         "value": false
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+- name: CBAM-OAM
+  hosts: oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance
+  connection: local
+  gather_facts: False
+  serial: 1
+
+  vars:
+    ansible_ssh_user: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+    ansible_ssh_pass: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+    oamActiveVirtualIp: "{{ vnf_context_data.vnf_attributes.extensions.oamActiveVirtualIp }}"
+    cli:
+      host: "{{ ansible_ssh_host }}"
+      username: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+      password: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+      transport: cli
+      timeout: 300
+
+  pre_tasks:
+    - name: Set OAM active virtual IP as current ansible host
+      set_fact:
+        ansible_ssh_host: "{{ oamActiveVirtualIp }}"
+      when: oamActiveVirtualIp != ""
+
+    - local_action:
+        module: wait_for
+          host={{ ansible_ssh_host }}
+          port=22
+          timeout=500
+          state=started
+      become: no
+
+  tasks:
+    - name: Configure default cards
+      sros_config:
+        lines:
+            - 'configure card 1 card-type iom-v'
+            - 'configure card 2 card-type iom-v'
+            - 'configure card 3 card-type iom-v-mg'
+            - 'configure card 4 card-type iom-v-mg'
+        provider: "{{ cli }}"
+        timeout: 300
+
+    - name: Global system/router configuration
+      sros_config:
+        lines:
+            - 'configure system snmp packet-size 9216'
+            - 'configure system security snmp community {{ vnf_context_data.vnf_attributes.extensions.snmpCommunity}} rwa version both'
+            - 'configure system snmp no shutdown'
+            - 'configure system login-control idle-timeout disable'
+            - 'configure router interface "system" address {{ vnf_context_data.vnf_attributes.extensions.systemIpAddr }}/32'
+            - 'configure router interface "system" no shutdown'
+            - 'configure system name "{{ vnf_context_data.vnf_attributes.extensions.vnfHostname}}"'
+        provider: "{{ cli }}"
+        timeout: 300
+
+    - name: Enable BOF persistence
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "5"
+        interval: "5"
+        commands:
+          - bof persist on
+
+    - name: Save BOF at cf1-A
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "10"
+        interval: "10"
+        commands:
+          - "bof save cf1-A:"
+        wait_for:
+          - result[0] contains "Completed"
+      ignore_errors: yes
+
+    - name: Save BOF at cf1-B
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "10"
+        interval: "10"
+        commands:
+          - "bof save cf1-B:"
+        wait_for:
+          - result[0] contains "Completed"
+      ignore_errors: yes
+
+    - name: Save configuration changes permanently
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "5"
+        interval: "5"
+        commands:
+          - /admin save

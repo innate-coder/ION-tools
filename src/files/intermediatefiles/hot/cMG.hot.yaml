@@ -1,0 +1,142 @@
+heat_template_version: 2015-04-30
+
+parameters:
+
+  cbam:
+    type: json
+
+resources:
+ oamAntiAffinityGroup:
+    type:  OS::Nova::ServerGroup
+    properties:
+      name: oamAntiAffinity
+      policies:
+        - anti-affinity
+
+ loadBalancerAntiAffinityGroup:
+    type:  OS::Nova::ServerGroup
+    properties:
+      name: loadBalancerAntiAffinity
+      policies:
+        - anti-affinity
+
+ controlSwitchFabricNet:
+    type: OS::Neutron::Net
+    properties:
+      name:
+        str_replace:
+          template: "$vnfName-controlSwitchFabricNet"
+          params:
+            $vnfName: { get_param: [ cbam, vnfId ] }
+
+ controlSwitchFabricSubnet:
+    type: OS::Neutron::Subnet
+    depends_on: [ controlSwitchFabricNet ]
+    properties:
+      cidr: { get_param: [ cbam, extensions, controlSwitchFabricCidr ] }
+      network: { get_resource: controlSwitchFabricNet }
+      gateway_ip: { get_param: [ cbam, extensions, controlSwitchFabricGatewayIp ] }
+      name:
+        str_replace:
+          template: "$vnfName-controlSwitchFabricSubnet"
+          params:
+            $vnfName: { get_param: [ cbam, vnfId ] }
+      enable_dhcp: False
+      ip_version: { get_param: [ cbam, resources, csfIpVersion ] }
+
+ mgAndLoadBalancerManagementNet:
+    type: OS::Neutron::Net
+    properties:
+      name:
+        str_replace:
+          template: "$vnfName-mgAndLoadBalancerManagementNet"
+          params:
+            $vnfName: { get_param: [ cbam, vnfId ] }
+
+ mgAndLoadBalancerManagementSubnet:
+    type: OS::Neutron::Subnet
+    depends_on: [ mgAndLoadBalancerManagementNet ]
+    properties:
+      cidr: { get_param: [ cbam, extensions, mgLbManagementCidr ] }
+      network: { get_resource: mgAndLoadBalancerManagementNet }
+      gateway_ip: { get_param: [ cbam, extensions, mgLbManagementGatewayIp ] }
+      name:
+        str_replace:
+          template: "$vnfName-mgAndLoadBalancerManagementSubnet"
+          params:
+            $vnfName: { get_param: [ cbam, vnfId ] }
+      enable_dhcp: False
+      ip_version: { get_param: [ cbam, resources, mgLbManagementIpVersion ] }
+
+ oamACompactFlash1:
+    type: OS::Cinder::Volume
+    properties:
+      name: { list_join: [ "-", [ { get_param: [ cbam, vnfId ] }, OAM-A-CompactFlash1 ] ] }
+      size:  { get_param: [ cbam, extensions, oamCompactFlash1Size ] }
+
+ oamACompactFlash2:
+    type: OS::Cinder::Volume
+    properties:
+      name: { list_join: [ "-", [ { get_param: [ cbam, vnfId ] }, OAM-A-CompactFlash2 ] ] }
+      size: { get_param: [ cbam, extensions, oamCompactFlash2Size ] }
+
+ oamBCompactFlash1:
+    type: OS::Cinder::Volume
+    properties:
+      name: { list_join: [ "-", [ { get_param: [ cbam, vnfId ] }, OAM-B-CompactFlash1 ] ] }
+      size:  { get_param: [ cbam, extensions, oamCompactFlash1Size ] }
+
+ oamBCompactFlash2:
+    type: OS::Cinder::Volume
+    properties:
+      name: { list_join: [ "-", [ { get_param: [ cbam, vnfId ] }, OAM-B-CompactFlash2 ] ] }
+      size: { get_param: [ cbam, extensions, oamCompactFlash2Size ] }
+
+ oamAspectGroup:
+    type: OS::Heat::ResourceGroup
+    depends_on: [ controlSwitchFabricSubnet, loadBalancerAspectGroup , mgRedundantAspectGroup, oamACompactFlash1, oamACompactFlash2, oamBCompactFlash1, oamBCompactFlash2]
+    properties:
+      count: { get_param: [ cbam, resources, oamAspectGroup, count ] }
+      resource_def:
+        type: cMG_OAMStaticAspect.template.yaml
+        properties:
+         cbam: { get_param: cbam }
+         oamAntiAffinityGrp: { get_resource: oamAntiAffinityGroup }
+         oamControlFabricNet: { get_resource: controlSwitchFabricNet }
+         oamADisk1: { get_resource: oamACompactFlash1 }
+         oamADisk2: { get_resource: oamACompactFlash2 }
+         oamBDisk1: { get_resource: oamBCompactFlash1 }
+         oamBDisk2: { get_resource: oamBCompactFlash2 }
+
+ loadBalancerAspectGroup:
+   type: OS::Heat::ResourceGroup
+   depends_on: [ controlSwitchFabricSubnet, mgAndLoadBalancerManagementSubnet ]
+   properties:
+     count: { get_param: [cbam, resources, loadBalancerAspectGroup, count ] }
+     removal_policies: [ { "resource_list": { get_param: [ cbam, resources, loadBalancerAspectGroup, blacklist] } } ]
+     resource_def:
+       type: cMG_LBInstanceGroup.template.yaml
+       properties:
+         cbam: { get_param: cbam }
+         prefix: { get_param: [ cbam, vnfId ] }
+         resources: { get_param: [ cbam, resources, loadBalancerAspectGroup ] }
+         loadBalancerMangementNet: { get_resource: mgAndLoadBalancerManagementNet }
+         loadBalancerFabricNet: { get_resource: controlSwitchFabricNet }
+         rg_index: '%index%'
+         loadBalancerAllowedAddressPairList: { get_param: [ cbam, extensions, externalIpAddressList ] }
+         loadBalancerAntiAffinityGrp: { get_resource: loadBalancerAntiAffinityGroup }
+         mtuSize: { get_param: [ cbam, extensions, mtu ] }
+
+ mgRedundantAspectGroup:
+   type: OS::Heat::ResourceGroup
+   depends_on: [ controlSwitchFabricSubnet,mgAndLoadBalancerManagementSubnet ]
+   properties:
+     count: { get_param: [cbam, resources, mgRedundantAspectGroup, count ] }
+     removal_policies: [ { "resource_list": { get_param: [ cbam, resources, mgRedundantAspectGroup, blacklist] } } ]
+     resource_def:
+       type: cMG_MGScalingAspect.template.yaml
+       properties:
+         cbam: { get_param: cbam }
+         mgManagementNet: { get_resource: mgAndLoadBalancerManagementNet }
+         mgControlFabricNet: { get_resource: controlSwitchFabricNet }
+         rg_index: '%index%'

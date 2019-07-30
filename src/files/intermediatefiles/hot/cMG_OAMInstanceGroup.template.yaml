@@ -1,0 +1,72 @@
+heat_template_version: 2015-04-30
+
+description:
+  Isolates OAM instance resource group
+
+parameters:
+  cbam:
+    type: json
+  resources:
+    type: json
+  prefix:
+    type: string
+    description: String to make the name of all created resources unique
+  oamAntiAffinityGrp:
+    type: string
+    description: OAM Anti Affinity Group
+  oamControlFabricNet:
+    type: string
+    description: Control Switch Fabric Network for OAM
+  oamDisk1:
+    type: string
+    description: OAM Active CompactFlash 1
+  oamDisk2:
+    type: string
+    description: OAM Active CompactFlash 2
+  oamSystemIp:
+    type: string
+    description: OAM System IP address
+  oamAllowedAddressPairs:
+    type: comma_delimited_list
+    description: OAM Allowed Address Pairs
+  oamSlotId:
+    type: string
+    description: OAM Slot Id
+  oamMgmtIp:
+    type: string
+    description: OAM IP address
+  oamControlSwitchFabricIp:
+    type: string
+    description: OAM Control Switch Fabric IP
+  mtuSize:
+    type: string
+    description: MTU Size for Switch Fabric
+  oamGroup:
+    type: string
+    default: "0"
+  oamMetadataIp:
+    type: string
+    description: OAM Management IP for Metadata
+
+resources:
+  oamInstanceGroup:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: [ resources, present ] }
+      resource_def:
+        type: cMG_OAM.template.yaml
+        properties:
+          cbam: { get_param: cbam }
+          prefix: { get_param: [ cbam, vnfId ] }
+          oamControlFabricNet: { get_param: oamControlFabricNet }
+          oamMgmtIp: { get_param: oamMgmtIp }
+          oamMetadataIp: { get_param: oamMetadataIp }
+          oamAllowedAddressPairs: { get_param: oamAllowedAddressPairs }
+          oamSlotId: { get_param: oamSlotId }
+          oamSystemIp: { get_param: oamSystemIp }
+          oamAntiAffinityGrp: { get_param: oamAntiAffinityGrp }
+          resources: { get_param: [ resources, oamInstanceGroup, { get_param: oamGroup }, oamServerInstance ] }
+          oamControlSwitchFabricIp: { get_param: oamControlSwitchFabricIp }
+          oamDisk1: { get_param: oamDisk1 }
+          oamDisk2: { get_param: oamDisk2 }
+          mtuSize: { get_param: mtuSize }

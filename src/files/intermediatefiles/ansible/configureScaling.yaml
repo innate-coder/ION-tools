@@ -1,0 +1,110 @@
+- name: CBAM-Scaling
+  hosts: oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance
+  connection: local
+  gather_facts: False
+  serial: 1
+
+  vars:
+    ansible_ssh_user: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+    ansible_ssh_pass: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+    resources: "{{ vnf_context_data.stack_params.cbam.resources }}"
+    mgScalingGroupIds: "{{ vnf_context_data.stack_params.cbam.resources.mgGroupIdAnsible }}"
+    mgScaleWorkingSlotIds: "{{ vnf_context_data.stack_params.cbam.resources.mgScaleWorkingSlotId }}"
+    mgScaleProtectSlotIds: "{{ vnf_context_data.stack_params.cbam.resources.mgScaleProtectSlotId }}"
+    lbScalingGroupIds: "{{ vnf_context_data.stack_params.cbam.resources.lbGroupIdAnsible }}"
+    lbScaleSlotIds: "{{ vnf_context_data.stack_params.cbam.resources.lbScaleSlotId }}"
+    config_file: "mgScaleoutConfig.cfg"
+    oamActiveVirtualIp: "{{ vnf_context_data.vnf_attributes.extensions.oamActiveVirtualIp }}"
+    scaleConfig: "{{ vnf_context_data.vnf_attributes.extensions.scaleConfig }}"
+    cli:
+      host: "{{ ansible_ssh_host }}"
+      username: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+      password: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+      transport: cli
+      timeout: 300
+
+  pre_tasks:
+    - name: Set OAM active virtual IP as current ansible host
+      set_fact:
+        ansible_ssh_host: "{{ oamActiveVirtualIp }}"
+      when: oamActiveVirtualIp != ""
+
+    - local_action:
+        module: wait_for
+          host={{ ansible_ssh_host }}
+          port=22
+          timeout=500
+          state=started
+      become: no
+
+  tasks:
+    - name: Remove configuration file in case it exists
+      file: path=../parsed.cfg state=absent
+      delegate_to: localhost
+      when: scaleConfig
+
+    - name: Set target config file for LB scale-out
+      set_fact:
+        config_file: lbScaleoutConfig.cfg
+      when: '"lbScaleOutOperation" in resources and scaleConfig'
+
+    - name: Set target config file for LB scale-in
+      set_fact:
+        config_file: lbScaleinDeconfig.cfg
+      when: '"lbScaleInOperation" in resources and scaleConfig'
+
+    - name: Set target config file for MG scale-in
+      set_fact:
+        config_file: mgScaleinDeconfig.cfg
+      when: '"mgScaleInOperation" in resources and scaleConfig'
+
+    - name: Replace LB slot ids per scaling group and append contents to file
+      shell: cat ../{{ config_file }} | awk '/configure/{p++}p=={{ item [0] }}' | sed 's/$loadBalancer/{{ item [1] }}/g' >> ../parsed.cfg
+      register: replace_lb
+      delegate_to: localhost
+      with_together:
+        - "{{ lbScalingGroupIds }}"
+        - "{{ lbScaleSlotIds }}"
+      when: '("lbScaleOutOperation" in resources or "lbScaleInOperation" in resources) and scaleConfig'
+
+    - name: Replace working and protect MG slot ids per scaling group and append contents to file
+      shell: cat ../{{ config_file }} | awk '/configure/{p++}p=={{ item [0] }}' | sed 's/$activeMg/{{ item [1] }}/g' | sed 's/$protectMg/{{ item [2] }}/g' >> ../parsed.cfg
+      register: replace_mg
+      delegate_to: localhost
+      with_together:
+        - "{{ mgScalingGroupIds }}"
+        - "{{ mgScaleWorkingSlotIds }}"
+        - "{{ mgScaleProtectSlotIds }}"
+      when: '("mgScaleOutOperation" in resources or "mgScaleInOperation" in resources) and scaleConfig'
+
+    - name: Transfer parsed configuration file to OAM
+      shell: sshpass -p '{{ ansible_ssh_pass }}' scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ../parsed.cfg {{ ansible_ssh_user }}@{{ ansible_ssh_host }}:cf1:/parsed.cfg
+      register: transfer_oam
+      delegate_to: localhost
+      when: scaleConfig
+
+    - name: Execute configuration file from OAM
+      register: config_output
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "5"
+        interval: "5"
+        commands:
+          - exec cf1:/parsed.cfg
+      when: scaleConfig
+
+    - name: Check for configuration execution failures
+      fail: msg="Execution of configuration was not completed successfully"
+      register: config_check
+      failed_when: config_output.stdout[0].find('MINOR') > 0 or config_output.stdout[0].find('MAJOR') > 0 or config_output.stdout[0].find('INFO') > 0 or config_output.stdout[0].find('CRITICAL') > 0 or config_output.stdout[0].find('ERROR') > 0 or config_output.stdout[0].find('WARNING') > 0
+      when: scaleConfig
+
+    - name: Save scaling configuration permanently
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "5"
+        interval: "5"
+        commands:
+          - /admin save
