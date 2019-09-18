@@ -1,9 +1,0 @@
-{
-    "apiVersion": "3.3",
-    "modify": {
-        "softwareImages": [{
-            "vnfdSoftwareImageId": "cmgImage",
-            "resourceId": "$ImageUUID"
-        }]
-    }
-}

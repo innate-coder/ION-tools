@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import constants.FilePath;
+
 public class ZipUtils {
 
     private List <String> fileList;
@@ -19,14 +21,14 @@ public class ZipUtils {
     }
 
     public static void main(String[] args) {
-    	
+  	
     	if(args!=null && args.length>0){
     		SOURCE_FOLDER = args[0];
     		OUTPUT_ZIP_FILE = args[1];
     	
     		ZipUtils appZip = new ZipUtils();
-    	        appZip.generateFileList(new File(SOURCE_FOLDER));
-    	        appZip.zipIt(OUTPUT_ZIP_FILE);	
+    	    appZip.generateFileList(new File(SOURCE_FOLDER));
+    	    appZip.zipIt(OUTPUT_ZIP_FILE);	
     	}
     }
 
@@ -35,12 +37,17 @@ public class ZipUtils {
      * Zip it
      * @param zipFile output ZIP file location
      */
-    public void zipIt(String zipFile){
+    public void zipIt(String outputFolderPath){
      byte[] buffer = new byte[1024];
      try{
-    	FileOutputStream fos = new FileOutputStream(zipFile);
+    	File outputFolder = new File(outputFolderPath);
+        if (!outputFolder.exists()){ 
+        	outputFolder.mkdirs();
+    	}
+        File zipFilePath = new File(outputFolder, FilePath.outputTemplateName);    
+    	FileOutputStream fos = new FileOutputStream(zipFilePath);
     	ZipOutputStream zos = new ZipOutputStream(fos);
-    	System.out.println("Output to Zip : " + zipFile);
+    	System.out.println("Output to Zip : " + zipFilePath);
     	for(String file : this.fileList){
     		System.out.println("File Added : " + file);
     		ZipEntry ze= new ZipEntry(file);

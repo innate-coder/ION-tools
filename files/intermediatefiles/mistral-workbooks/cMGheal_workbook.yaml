@@ -1,0 +1,651 @@
+---
+version: '2.0'
+name: heal_workbook
+workflows:
+
+  heal_starting:
+    input:
+      - operationType
+      - operationParams
+      - operationExecution
+      - vnfInventory
+
+    output:
+      operationParams: <% $.operationParams %>
+      operationType: <% $.operationType %>
+      vnfInventory: <% $.vnfInventory %>
+      operationExecution: <% $.operationExecution %>
+      originalResourceModel: <% $.vnfInventory.get(resourceModel, {}) %>
+      vnfcToHeal: <% $.vnfcToHeal %>
+      flatResourceModel: <% $.flatResourceModel %>
+      stackParams: <% $.stackParams %>
+      expectedModel: <% $.expectedModel %>
+      serverNfvId: <% $.serverNfvId %>
+
+    output-on-error:
+      error_message: <% $.get(error_message, 'Early failure happens in heal_starting') %>
+
+    tasks:
+      # Calculate the actual resource model
+      generate_model_from_config:
+        action: cbam.generate_model_from_config
+        input:
+          vnf_template: <% $.vnfInventory.vnfTemplate %>
+          expected_nfv_model: <% $.vnfInventory.nfvModel %>
+        publish:
+          expectedModel: <% task(generate_model_from_config).result %>
+        publish-on-error:
+          error_message: <% task(generate_model_from_config).result %>
+        on-success:
+          - calculate_stack_params
+
+      # Calculate the actutal stack parameters
+      calculate_stack_params:
+        action: cbam.calculate_stack_params
+        input:
+          vnf_inventory: <% $.vnfInventory %>
+          expected_nfv_model: <% $.vnfInventory.nfvModel %>
+          expected_model: <% $.expectedModel %>
+        publish:
+          stackParams: <% task(calculate_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(calculate_stack_params).result %>
+        on-success:
+          - add_slotId_stack_params
+
+      add_slotId_stack_params:
+        action: cbam.evaluate_javascript
+        input:
+          javascript: javascript/assignSlotIDs.js
+          include: []
+          context:
+            stack_params: <% $.stackParams %>
+            resource_model: <% $.vnfInventory.resourceModel %>
+            operation_params: <% $.operationParams %>
+        publish:
+          stackParams: <% task(add_slotId_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(add_slotId_stack_params).result %>
+        on-success:
+          - add_zones_stack_params
+
+      add_zones_stack_params:
+        action: cbam.evaluate_javascript
+        input:
+          javascript: javascript/assignZones.js
+          include: []
+          context:
+            stack_params: <% $.stackParams %>
+            resource_model: <% $.vnfInventory.resourceModel %>
+            nfv_model: <% $.vnfInventory.nfvModel %>
+        publish:
+          stackParams: <% task(add_zones_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(add_zones_stack_params).result %>
+        on-success:
+          - add_cpCoresAndCfp_stack_params
+
+      add_cpCoresAndCfp_stack_params:
+        action: cbam.evaluate_javascript
+        input:
+          javascript: javascript/assignCpCoresAndCfp.js
+          include: []
+          context:
+            stack_params: <% $.stackParams %>
+            resource_model: <% $.vnfInventory.resourceModel %>
+            nfv_model: <% $.vnfInventory.nfvModel %>
+            operation_params: <% $.operationParams %>
+        publish:
+          stackParams: <% task(add_cpCoresAndCfp_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(add_cpCoresAndCfp_stack_params).result %>
+        on-success:
+          - add_smbios_stack_params
+
+      add_smbios_stack_params:
+        action: cbam.evaluate_javascript
+        input:
+          javascript: javascript/generateSmbios.js
+          include: []
+          context:
+            stack_params: <% $.stackParams %>
+            resource_model: <% $.vnfInventory.resourceModel %>
+            nfv_model: <% $.vnfInventory.nfvModel %>
+            operation_params: <% $.operationParams %>
+        publish:
+          stackParams: <% task(add_smbios_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(add_smbios_stack_params).result %>
+        on-success:
+          - check_for_provided_vnfc_id
+
+      check_for_provided_vnfc_id:
+        action: std.noop
+        publish:
+          vnfcToHeal: <% $.operationParams.additionalParams.get(vnfcToHeal) %>
+        publish-on-error:
+          error_message: <% task(check_for_provided_vnfc_id).result %>
+        on-success:
+          - flatten_resource_model: <% $.operationParams.additionalParams.get(vnfcToHeal, null) != null %>
+
+      flatten_resource_model:
+        action: cbam.hierarchical_to_flat_resource_model
+        input:
+          hierarchical_resource_model: <% $.vnfInventory.resourceModel %>
+        publish:
+          flatResourceModel: <% task(flatten_resource_model).result %>
+        publish-on-error:
+          error_message: <% task(flatten_resource_model).result %>
+        on-success:
+          - get_nfv_machine_id
+
+      get_nfv_machine_id:
+        action: std.javascript
+        input:
+          context:
+            flatResourceModel: <% $.flatResourceModel %>
+            vnfcToHeal: <% $.vnfcToHeal %>
+          script: |
+            var slotIds = [];
+            var vnfcNames = [];
+            var nfvIds = [];
+
+            // fill vnfcNames, slotIds and nfvIds arrays with the VNFC Ids of all the already deployed VMs
+            for(key in $.flatResourceModel) {
+              if ((/loadBalancerAspectGroup.[0-9]+.loadBalancerInstanceGroup.0.loadBalancerServerInstance/.test(key)) || (/mgRedundantAspectGroup.[0-9]+.mgWorking.mgInstanceGroup.0.mgServerInstance/.test(key)) || (/mgRedundantAspectGroup.[0-9]+.mgProtect.mgInstanceGroup.0.mgServerInstance/.test(key)) || (/oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamServerInstance/.test(key)) || (/oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance/.test(key))) {
+                  slotIds.push($.flatResourceModel[key].metadata.nokia_vnf_slotId);
+                  vnfcNames.push($.flatResourceModel[key].attributes.name);
+                  nfvIds.push(key);
+              }
+            }
+            try {
+                // check if input is included in slotIds array
+                if (slotIds.indexOf($.vnfcToHeal) >= 0 && $.vnfcToHeal.length <= 2 && $.vnfcToHeal.length > 0) {
+                      var slotIndex = slotIds.indexOf($.vnfcToHeal);
+                      return nfvIds[slotIndex];
+                }
+                // check if input is included in vnfcNames array
+                else if (vnfcNames.indexOf($.vnfcToHeal) >= 0 && $.vnfcToHeal.length > 2) {
+                      var NameIndex = vnfcNames.indexOf($.vnfcToHeal);
+                      return nfvIds[NameIndex];
+                }
+                // check if input is included in nfvIds array
+                else if (nfvIds.indexOf($.vnfcToHeal) >= 0 && $.vnfcToHeal.length > 2) {
+                      return $.vnfcToHeal;
+                }
+                else
+                {
+                      throw new Error('Invalid VNFC Id was provided');
+                }
+            }
+            catch (error) {
+                var customMessage = error.message + ": " + $.vnfcToHeal;
+                return customMessage;
+            }
+        publish:
+          serverNfvId: <% task(get_nfv_machine_id).result %>
+        publish-on-error:
+          error_message: <% task(get_nfv_machine_id).result %>
+
+  heal_processing:
+    input:
+      - operationParams
+      - operationType
+      - vnfInventory
+      - operationExecution
+      - originalResourceModel
+      - vnfcToHeal
+      - flatResourceModel
+      - stackParams
+      - expectedModel
+      - serverNfvId
+
+    output-on-error:
+      error_message: <% $.get(error_message, 'Early failure happens in heal_processing') %>
+
+    tasks:
+      init:
+        on-success:
+          - get_physical_resource_id: <% $.serverNfvId = 'oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance' or $.serverNfvId = 'oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamServerInstance' %>
+          - populate_vm_slot_id_ansible: <% $.serverNfvId != 'oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance' and $.serverNfvId != 'oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamServerInstance' %>
+
+      get_physical_resource_id:
+        action: std.javascript
+        input:
+          context:
+            flatResourceModel: <% $.flatResourceModel %>
+            vnfcToHeal: <% $.vnfcToHeal %>
+          script: |
+            var slotIds = [];
+            var vnfcNames = [];
+            var nfvIds = [];
+
+            for(key in $.flatResourceModel) {
+              if ((/oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamServerInstance/.test(key)) || (/oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance/.test(key))) {
+                  slotIds.push($.flatResourceModel[key].metadata.nokia_vnf_slotId);
+                  vnfcNames.push($.flatResourceModel[key].attributes.name);
+                  nfvIds.push(key);
+              }
+            }
+            try {
+                // check if input is included in slotIds array
+                if (slotIds.indexOf($.vnfcToHeal) >= 0 && $.vnfcToHeal.length <= 2 && $.vnfcToHeal.length > 0) {
+                      var slotIndex = slotIds.indexOf($.vnfcToHeal);
+                      return $.flatResourceModel[nfvIds[slotIndex]].physical_resource_id;
+                }
+                // check if input is included in vnfcNames array
+                else if (vnfcNames.indexOf($.vnfcToHeal) >= 0 && $.vnfcToHeal.length > 2) {
+                      var NameIndex = vnfcNames.indexOf($.vnfcToHeal);
+                      return $.flatResourceModel[nfvIds[NameIndex]].physical_resource_id;
+                }
+                // check if input is included in nfvIds array
+                else if (nfvIds.indexOf($.vnfcToHeal) >= 0 && $.vnfcToHeal.length > 2) {
+                      return $.flatResourceModel[$.vnfcToHeal].physical_resource_id;
+                }
+                else
+                {
+                      throw new Error('Invalid VNFC Id was provided');
+                }
+            }
+            catch (error) {
+                var customMessage = error.message + ": " + $.vnfcToHeal;
+                return customMessage;
+            }
+        publish:
+          serverPhysId: <% task(get_physical_resource_id).result %>
+        publish-on-error:
+          error_message: <% task(get_physical_resource_id).result %>
+        on-success:
+          - populate_vm_slot_id_ansible
+
+      populate_vm_slot_id_ansible:
+        action: std.javascript
+        input:
+          context:
+            stack_params: <% $.stackParams %>
+            flatResourceModel: <% $.flatResourceModel %>
+            serverNfvId: <% $.serverNfvId %>
+          script: |
+            $.stack_params.cbam.resources.slotIdAnsible = "[" + "'" +  $.flatResourceModel[$.serverNfvId].metadata.nokia_vnf_slotId + "']"
+            return $.stack_params
+        publish:
+          stackParams:  <% task(populate_vm_slot_id_ansible).result %>
+        publish-on-error:
+          error_message: <% task(populate_vm_slot_id_ansible).result %>
+        on-success:
+          - reboot_server_soft: <% $.serverNfvId = 'oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance' or $.serverNfvId = 'oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamServerInstance' %>
+          - reinstantiate_instance: <% $.serverNfvId != 'oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance' and $.serverNfvId != 'oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamServerInstance' %>
+
+      reinstantiate_instance:
+        workflow: reinstantiate_instance
+        input:
+          stackParams: <% $.stackParams %>
+          serverNfvId: <% $.serverNfvId %>
+          vnfInventory: <% $.vnfInventory %>
+          operationType: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(reinstantiate_instance).result %>
+        on-success:
+          - prepare_ansible_inventory_after_reinstantiate
+
+      reboot_server_soft:
+        action: nova.servers_reboot
+        input:
+          server: <% $.serverPhysId %>
+          reboot_type: SOFT
+        publish-on-error:
+          error_message: <% task(reboot_server_soft).result %>
+        on-success:
+          - wait_instance_after_soft_reboot
+        on-error:
+          - reboot_server_hard
+
+      wait_instance_after_soft_reboot:
+        action: nova.servers_find id=<% $.serverPhysId %> status='ACTIVE'
+        retry:
+          delay: 5
+          count: 300
+        publish-on-error:
+          error_message: <% task(wait_instance_after_soft_reboot).result %>
+        on-success:
+          - prepare_ansible_inventory_after_soft_reboot
+        on-error:
+          - reboot_server_hard
+
+      reboot_server_hard:
+        action: nova.servers_reboot
+        input:
+          server: <% $.serverPhysId %>
+          reboot_type: HARD
+        publish-on-error:
+          error_message: <% task(reboot_server_hard).result %>
+        on-success:
+          - wait_instance_after_hard_reboot
+        on-error:
+          - get_image_id
+
+      wait_instance_after_hard_reboot:
+        action: nova.servers_find id=<% $.serverPhysId %> status='ACTIVE'
+        retry:
+          delay: 5
+          count: 300
+        publish-on-error:
+          error_message: <% task(wait_instance_after_hard_reboot).result %>
+        on-success:
+          - prepare_ansible_inventory_after_hard_reboot
+        on-error:
+          - get_image_id
+
+      get_image_id:
+        action: std.javascript
+        input:
+          context:
+            stack_params: <% $.stackParams %>
+            flatResourceModel: <% $.flatResourceModel %>
+            serverNfvId: <% $.serverNfvId %>
+          script: |
+            var vduType = $.flatResourceModel[$.serverNfvId].vdu
+            vduType = vduType.toString()
+            var image =  $.stack_params.cbam.vdus[vduType].imageId
+            return image
+        publish:
+          image: <% task(get_image_id).result %>
+        publish-on-error:
+          error_message: <% task(get_image_id).result %>
+        on-success:
+          - nova_rebuild_vm
+        on-error:
+          - reinstantiate_instance
+
+      nova_rebuild_vm:
+        action: nova.servers_rebuild
+        input:
+          server: <% $.serverPhysId %>
+          image: <% $.image %>
+        publish-on-error:
+          error_message: <% task(nova_rebuild_vm).result %>
+        on-success:
+          - wait_instance_after_nova_rebuild
+        on-error:
+          - reinstantiate_instance
+
+      wait_instance_after_nova_rebuild:
+        action: nova.servers_find id=<% $.serverPhysId %> status='ACTIVE'
+        retry:
+          delay: 5
+          count: 300
+        publish-on-error:
+          error_message: <% task(wait_instance_after_nova_rebuild).result %>
+        on-success:
+          - prepare_ansible_inventory_after_nova_rebuild
+        on-error:
+          - reinstantiate_instance
+
+      prepare_ansible_inventory_after_soft_reboot:
+        action: cbam.prepare_ansible_inventory
+        input:
+          vnf_inventory: <% $.vnfInventory %>
+        publish:
+          ansibleInventory: <% task(prepare_ansible_inventory_after_soft_reboot).result %>
+        publish-on-error:
+          error_message: <% task(prepare_ansible_inventory_after_soft_reboot).result %>
+        on-success:
+          - checkVm_state_after_soft_reboot
+        on-error:
+          - reboot_server_hard
+
+      prepare_ansible_inventory_after_hard_reboot:
+        action: cbam.prepare_ansible_inventory
+        input:
+          vnf_inventory: <% $.vnfInventory %>
+        publish:
+          ansibleInventory: <% task(prepare_ansible_inventory_after_hard_reboot).result %>
+        publish-on-error:
+          error_message: <% task(prepare_ansible_inventory_after_hard_reboot).result %>
+        on-success:
+          - checkVm_state_after_hard_reboot
+        on-error:
+          - get_image_id
+
+      prepare_ansible_inventory_after_nova_rebuild:
+        action: cbam.prepare_ansible_inventory
+        input:
+          vnf_inventory: <% $.vnfInventory %>
+        publish:
+          ansibleInventory: <% task(prepare_ansible_inventory_after_nova_rebuild).result %>
+        publish-on-error:
+          error_message: <% task(prepare_ansible_inventory_after_nova_rebuild).result %>
+        on-success:
+          - checkVm_state_after_nova_rebuild
+        on-error:
+          - reinstantiate_instance
+
+      prepare_ansible_inventory_after_reinstantiate:
+        action: cbam.prepare_ansible_inventory
+        input:
+          vnf_inventory: <% $.vnfInventory %>
+        publish:
+          ansibleInventory: <% task(prepare_ansible_inventory_after_reinstantiate).result %>
+        publish-on-error:
+          error_message: <% task(prepare_ansible_inventory_after_reinstantiate).result %>
+        on-success:
+          - checkVm_state_after_reinstantiate
+        on-error:
+          - query_heat_resources
+
+      checkVm_state_after_soft_reboot:
+        action: cbam.run_playbook_extension
+        input:
+          action:
+            ansible: ansible/checkVmsUp.yaml
+          operation_parameters: <% $.operationParams %>
+          vnf_inventory: <% $.vnfInventory %>
+          stack_params: <% $.stackParams %>
+          ansible_inventory: <% $.ansibleInventory %>
+        publish-on-error:
+          error_message: <% task(checkVm_state_after_soft_reboot).result %>
+        on-success:
+          - query_heat_resources
+        on-error:
+          - reboot_server_hard
+
+      checkVm_state_after_hard_reboot:
+        action: cbam.run_playbook_extension
+        input:
+          action:
+            ansible: ansible/checkVmsUp.yaml
+          operation_parameters: <% $.operationParams %>
+          vnf_inventory: <% $.vnfInventory %>
+          stack_params: <% $.stackParams %>
+          ansible_inventory: <% $.ansibleInventory %>
+        publish-on-error:
+          error_message: <% task(checkVm_state_after_hard_reboot).result %>
+        on-success:
+          - query_heat_resources
+        on-error:
+          - get_image_id
+
+      checkVm_state_after_nova_rebuild:
+        action: cbam.run_playbook_extension
+        input:
+          action:
+            ansible: ansible/checkVmsUp.yaml
+          operation_parameters: <% $.operationParams %>
+          vnf_inventory: <% $.vnfInventory %>
+          stack_params: <% $.stackParams %>
+          ansible_inventory: <% $.ansibleInventory %>
+        publish-on-error:
+          error_message: <% task(checkVm_state_after_nova_rebuild).result %>
+        on-success:
+          - query_heat_resources
+        on-error:
+          - reinstantiate_instance
+
+      checkVm_state_after_reinstantiate:
+        action: cbam.run_playbook_extension
+        input:
+          action:
+            ansible: ansible/checkVmsUp.yaml
+          operation_parameters: <% $.operationParams %>
+          vnf_inventory: <% $.vnfInventory %>
+          stack_params: <% $.stackParams %>
+          ansible_inventory: <% $.ansibleInventory %>
+        publish-on-error:
+          error_message: <% task(checkVm_state_after_reinstantiate).result %>
+        on-complete:
+          - query_heat_resources
+
+      query_heat_resources:
+        action: cbam.query_heat_resources
+        input:
+          stack_id: <% $.vnfInventory.get(stackId) %>
+        publish:
+          vnfInventory: <% $.vnfInventory.set(resourceModel, task(query_heat_resources).result) %>
+        publish-on-error:
+          error_message: <% task(query_heat_resources).result %>
+        on-success:
+          - add_nfv_info_to_resource_model
+
+      #Extend the resource model with NFV info with updated resources
+      add_nfv_info_to_resource_model:
+        action: cbam.add_nfv_info_to_resource_model
+        input:
+          expected_resource_model: <% $.expectedModel %>
+          resource_model: <% $.vnfInventory.resourceModel %>
+        publish:
+          vnfInventory: <% $.vnfInventory.set(resourceModel, task(add_nfv_info_to_resource_model).result) %>
+        publish-on-error:
+          error_message: <% task(add_nfv_info_to_resource_model).result %>
+        on-success:
+          - query_heat_resource_metadata
+
+      query_heat_resource_metadata:
+        action: cbam.query_heat_resource_metadata
+        input:
+          resource_model: <% $.vnfInventory.resourceModel %>
+        publish:
+          vnfInventory: <% $.vnfInventory.set(resourceModel, task(query_heat_resource_metadata).result) %>
+        publish-on-error:
+          error_message: <% task(query_heat_resource_metadata).result %>
+        on-success:
+          - update_vnf_inventory_successful_healing
+
+      update_vnf_inventory_successful_healing:
+        action: cbam.update_vnf_inventory
+        input:
+          resource_model: <% $.vnfInventory.resourceModel %>
+          nfv_model: <% $.vnfInventory.nfvModel %>
+        publish-on-error:
+          error_message: <% task(update_vnf_inventory_successful_healing).result %>
+
+  reinstantiate_instance:
+    input:
+      - stackParams
+      - serverNfvId
+      - vnfInventory
+      - operationType
+
+    output-on-error:
+      error_message: <% $.get(error_message, 'VM was not re-instantiated successfully') %>
+
+    tasks:
+      set_vnfc_present_zero:
+        action: std.javascript
+        input:
+          context:
+            stackParams: <% $.stackParams %>
+            serverNfvId: <% $.serverNfvId %>
+          script: |
+            splittedVnfc = $.serverNfvId.split('.')
+            actual = $.stackParams.cbam.resources
+            for (i=0; i < splittedVnfc.length; i++) {
+              actual = actual[splittedVnfc[i]]
+              if (actual.hasOwnProperty('present')) {
+                actual.present = 0
+                break
+              }
+            }
+            return $.stackParams
+        publish:
+          stackParams: <% task(set_vnfc_present_zero).result %>
+        publish-on-error:
+          error_message: <% task(set_vnfc_present_zero).result %>
+        on-success:
+          - delete_instance
+
+      delete_instance:
+        workflow: update_stack_and_wait
+        input:
+          vnfInventory: <% $.vnfInventory %>
+          stackParams: <% $.stackParams %>
+          operationType: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(delete_instance).result %>
+        on-success:
+          - set_vnfc_present_one_update_image
+
+      set_vnfc_present_one_update_image:
+        action: std.javascript
+        input:
+          context:
+            stackParams: <% $.stackParams %>
+            serverNfvId: <% $.serverNfvId %>
+            imageId: <% $.vnfInventory.nfvModel.swImages.cmgImage.vimSoftwareImageId %>
+          script: |
+            splittedVnfc = $.serverNfvId.split('.')
+            actual = $.stackParams.cbam.resources
+            for (i=0; i < splittedVnfc.length; i++) {
+              actual = actual[splittedVnfc[i]]
+              if (actual.hasOwnProperty('present')) {
+                actual.present = 1
+              }
+              if (actual.hasOwnProperty('imageId')) {
+                actual.imageId = $.imageId
+                break
+              }
+            }
+            return $.stackParams
+        publish:
+          stackParams: <% task(set_vnfc_present_one_update_image).result %>
+        publish-on-error:
+          error_message: <% task(set_vnfc_present_one_update_image).result %>
+        on-success:
+          - create_instance
+
+      create_instance:
+        workflow: update_stack_and_wait
+        input:
+          vnfInventory: <% $.vnfInventory %>
+          stackParams: <% $.stackParams %>
+          operationType: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(create_instance).result %>
+
+  update_stack_and_wait:
+    input:
+      - vnfInventory
+      - stackParams
+      - operationType
+
+    output-on-error:
+      error_message: <% $.get(error_message, 'Stack was not updated successfully') %>
+
+    tasks:
+      modify_stack_params:
+        action: cbam.manipulate_stack
+        input:
+          vnf_inventory: <% $.vnfInventory %>
+          stack_params: <% $.stackParams %>
+          operation_type: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(modify_stack_params).result %>
+        on-success:
+          - wait_for_modify_stack_params_to_finish
+
+      wait_for_modify_stack_params_to_finish:
+        action: cbam.wait_for_stack
+        input:
+          stack_id: <% $.vnfInventory.get(stackId, null) %>
+          operation_type: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(wait_for_modify_stack_params_to_finish).result %>

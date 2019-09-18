@@ -1,0 +1,412 @@
+- name: CBAM-ScaleIn
+  hosts: oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance
+  connection: local
+  gather_facts: False
+  serial: 1
+
+  vars:
+    ansible_ssh_user: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+    ansible_ssh_pass: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+    resources: "{{ vnf_context_data.stack_params.cbam.resources }}"
+    mgScaleWorkingSlotIds: "{{ vnf_context_data.stack_params.cbam.resources.mgScaleWorkingSlotId }}"
+    gracefulScaleIn: "{{ vnf_context_data.vnf_attributes.extensions.gracefulScaleIn }}"
+    suspendTimer: "{{ vnf_context_data.vnf_attributes.extensions.suspendTimer }}"
+    sessionDeletionRate: "{{ vnf_context_data.vnf_attributes.extensions.sessionDeletionRate }}"
+    oamActiveVirtualIp: "{{ vnf_context_data.vnf_attributes.extensions.oamActiveVirtualIp }}"
+    cli:
+      host: "{{ ansible_ssh_host }}"
+      username: "{{ vnf_context_data.vnf_attributes.extensions.oamUsername }}"
+      password: "{{ vnf_context_data.vnf_attributes.extensions.oamPassword }}"
+      transport: cli
+      timeout: 300
+
+  pre_tasks:
+    - name: Update suspendTimer if value is not the default one
+      set_fact:
+        suspendTimer: "{{ vnf_context_data.operation_params.additionalParams.suspendTimer }}"
+      when: '"{{ vnf_context_data.operation_params.additionalParams.suspendTimer }}" != "default" and ("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Update sessionDeletionRate if value is not the default one
+      set_fact:
+        sessionDeletionRate: "{{ vnf_context_data.operation_params.additionalParams.sessionDeletionRate }}"
+      when: '"{{ vnf_context_data.operation_params.additionalParams.sessionDeletionRate }}" != "default" and ("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Fail operation if suspendTimer is not inside the expected range
+      fail: msg="suspendTimer value is not inside the expected range"
+      register: suspendtimer_check
+      failed_when: '{{ suspendTimer }} < 10 or {{ suspendTimer }} > 30'
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Fail operation if sessionDeletionRate is not inside the expected range
+      fail: msg="sessionDeletionRate value is not inside the expected range"
+      register: session_deletion_rate_check
+      failed_when: '{{ sessionDeletionRate }} < 2 or {{ sessionDeletionRate }} > 2048'
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Set OAM active virtual IP as current ansible host
+      set_fact:
+        ansible_ssh_host: "{{ oamActiveVirtualIp }}"
+      when: oamActiveVirtualIp != ""
+
+    - local_action:
+        module: wait_for
+          host={{ ansible_ssh_host }}
+          port=22
+          timeout=500
+          state=started
+      become: no
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+  tasks:
+    - name: Execute command for displaying group ids per card
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - show mobile-gateway system card {{ item }} | match expression "Group. "
+      with_items:
+        - "{{ mgScaleWorkingSlotIds }}"
+      register: mgsystem_groups
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Retrieve the relevant group ids
+      delegate_to: localhost
+      raw: echo "{{ item.stdout_lines }}" | cut -d ":" -f2 | awk '{print $1}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]'
+      with_items:
+        - "{{ mgsystem_groups.results }}"
+      register: group_ids
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Execute command for displaying gateway ids per card
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - show mobile-gateway system card {{ item }} | match expression "Gateway.*Instance-type"
+      with_items:
+        - "{{ mgScaleWorkingSlotIds }}"
+      register: mgsystem_gateway
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Get the current configured PDN IDs
+      delegate_to: localhost
+      raw: echo "{{ item.stdout_lines }}" | cut -d ":" -f2 | awk '{print $1}'
+      with_items:
+        - "{{ mgsystem_gateway.results }}"
+      register: configured_pdn
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Configure maximum suspend duration
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - admin mobile-gateway max-suspend-duration {{ suspendTimer }}
+      register: configure_max_suspend
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Check for configuration execution failures
+      fail: msg="Execution of configuration action was not completed successfully"
+      register: config_suspend_check
+      failed_when: configure_max_suspend.stdout[0].find('MINOR') != -1 or configure_max_suspend.stdout[0].find('MAJOR') != -1 or configure_max_suspend.stdout[0].find('ERROR') != -1 or configure_max_suspend.stdout[0].find('INFO') != -1 or configure_max_suspend.stdout[0].find('WARNING') != -1 or configure_max_suspend.stdout[0].find('CRITICAL') != -1
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Configure session deletion rate for PDN
+      sros_config:
+        provider: "{{ cli }}"
+        timeout: 300
+        lines:
+          - configure mobile-gateway pdn {{ item | join ('\n') }} session-deletion-rate {{ sessionDeletionRate }}
+      with_items:
+        - "{{ configured_pdn.results | map(attribute='stdout_lines') | list | unique }}"
+      register: configure_session_deletion_rate
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Suspend the candidate for scale-in MG groups
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - admin mobile-gateway group {{ item.stdout_lines | join ('\n') }} suspend
+      with_items:
+        - "{{ group_ids.results }}"
+      register: suspend_groups
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Check for suspend execution failures
+      fail: msg="Execution of suspend action was not completed successfully"
+      register: config_suspend_check
+      failed_when: '"MINOR" in item.stdout[0] or "MAJOR" in item.stdout[0] or "ERROR" in item.stdout[0] or "INFO" in item.stdout[0] or "WARNING" in item.stdout[0] or "CRITICAL" in item.stdout[0]'
+      with_items:
+        - "{{ suspend_groups.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Convert suspendTimer value so that can be applicable for retries
+      delegate_to: localhost
+      raw: echo "$(((60 * {{ suspendTimer }}) / 10))"
+      register: suspendtimer_retries
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Check current number of sessions per group in parallel during first waiting period after suspend action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "{{ suspendtimer_retries.stdout }}"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context group {{ item.stdout_lines | join ('\n') }}
+        wait_for:
+          - result[0] contains "No Matching Entries"
+      with_items:
+        - "{{ group_ids.results }}"
+      async: 8000
+      poll: 0
+      ignore_errors: yes
+      register: check_sessions_suspend_timer
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Wait for an amount of time equal to maximum suspend duration after suspend action and proceed when sessions are cleared
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      register: wait_suspend_timer
+      retries: 800
+      delay: 10
+      until: wait_suspend_timer.finished
+      ignore_errors: yes
+      with_items:
+        - "{{ check_sessions_suspend_timer.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
+
+    - name: Retrieve the current number of remaining sessions for the relevant groups after suspend action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context group {{ item.stdout_lines | join ('\n') }} | match "Number of PDN instances :"
+      with_items:
+        - "{{ group_ids.results }}"
+      register: retrieve_numsessions_suspend
+      ignore_errors: yes
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed'
+
+    - name: Parse number of sessions from previous output after suspend action
+      raw: if [ "{{ item.stdout[0] }}" == "" ]; then echo "0"; else echo "{{ item.stdout[0] }}" | cut -d":" -f2 | awk '{print $1}'; fi
+      delegate_to: localhost
+      register: parse_numsessions_suspend
+      ignore_errors: yes
+      with_items:
+        - "{{ retrieve_numsessions_suspend.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed'
+
+    - name: Calculate waiting time based on current remaining sessions and configurable session deletion rate after suspend action
+      raw: if [ "{{ item.stdout_lines | join ('\n') }}" == "0" ]; then echo "skip"; else printf %.f $(echo "(({{ item.stdout_lines | join ('\n') }} / {{ sessionDeletionRate }} + 30) / 10)" | bc -l); fi
+      delegate_to: localhost
+      register: get_waiting_time_suspend
+      ignore_errors: yes
+      with_items:
+        - "{{ parse_numsessions_suspend.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed'
+
+    - name: Check current number of sessions per group in parallel during additional waiting period after suspend action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "{{ item[0].stdout_lines | join ('\n') }}"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context group {{ item[1].stdout_lines | join ('\n') }}
+        wait_for:
+          - result[0] contains "No Matching Entries"
+      with_together:
+        - "{{ get_waiting_time_suspend.results }}"
+        - "{{ group_ids.results }}"
+      async: 800000
+      poll: 0
+      ignore_errors: yes
+      register: check_sessions_additional_time
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and item[0].stdout_lines | join ("\n") != "skip"'
+
+    - name: Wait an additional amount of time after suspend action and proceed when sessions are cleared
+      async_status:
+        jid: "{{ item[0].ansible_job_id }}"
+      register: wait_additional_time_suspend
+      retries: 80000
+      delay: 10
+      until: wait_additional_time_suspend.finished
+      ignore_errors: yes
+      with_together:
+        - "{{ check_sessions_additional_time.results }}"
+        - "{{ get_waiting_time_suspend.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and item[1].stdout_lines | join ("\n") != "skip"'
+
+    - name: Retrieve the current number of remaining sessions for the relevant groups before clear action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context group {{ item.stdout_lines | join ('\n') }} | match "Number of PDN instances :"
+      with_items:
+        - "{{ group_ids.results }}"
+      register: retrieve_numsessions_clear
+      ignore_errors: yes
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed'
+
+    - name: Parse number of sessions from previous output before clear action
+      raw: if [ "{{ item.stdout[0] }}" == "" ]; then echo "0"; else echo "{{ item.stdout[0] }}" | cut -d":" -f2 | awk '{print $1}'; fi
+      delegate_to: localhost
+      register: parse_numsessions_clear
+      ignore_errors: yes
+      with_items:
+        - "{{ retrieve_numsessions_clear.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed'
+
+    - name: Calculate waiting time based on current remaining sessions and configurable session deletion rate before clear action
+      raw: if [ "{{ item.stdout_lines | join ('\n') }}" == "0" ]; then echo "skip"; else printf %.f $(echo "(({{ item.stdout_lines | join ('\n') }} / {{ sessionDeletionRate }} + 30) / 10)" | bc -l); fi
+      delegate_to: localhost
+      register: get_waiting_time_clear
+      ignore_errors: yes
+      with_items:
+        - "{{ parse_numsessions_clear.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed'
+
+    - name: Clear all the remaining sessions
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - clear mobile-gateway pdn {{ item[0].stdout_lines | join ('\n') }} bearer-context group {{ item[1].stdout_lines | join ('\n') }} session-deletion-rate {{ sessionDeletionRate }}
+      with_together:
+        - "{{ configured_pdn.results }}"
+        - "{{ group_ids.results }}"
+        - "{{ parse_numsessions_clear.results }}"
+      register: clear_sessions
+      ignore_errors: yes
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed and item[2].stdout_lines | join ("\n") != "0"'
+
+    - name: Check current number of sessions per group in parallel after clear action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "{{ item[0].stdout_lines | join ('\n') }}"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context group {{ item[1].stdout_lines | join ('\n') }}
+        wait_for:
+          - result[0] contains "No Matching Entries"
+      with_together:
+        - "{{ get_waiting_time_clear.results }}"
+        - "{{ group_ids.results }}"
+      async: 800000
+      poll: 0
+      ignore_errors: yes
+      register: check_sessions_clear
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed and item[0].stdout_lines | join ("\n") != "skip"'
+
+    - name: Wait an amount of time after clear action and proceed when sessions are cleared
+      async_status:
+        jid: "{{ item[0].ansible_job_id }}"
+      register: wait_after_clear
+      retries: 80000
+      delay: 10
+      until: wait_after_clear.finished
+      ignore_errors: yes
+      with_together:
+        - "{{ check_sessions_clear.results }}"
+        - "{{ get_waiting_time_clear.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed and item[1].stdout_lines | join ("\n") != "skip"'
+
+    - name: Retrieve the current number of remaining sessions for the relevant groups before shutdown action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "40"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context group {{ item.stdout_lines | join ('\n') }} | match "Number of PDN instances :"
+      with_items:
+        - "{{ group_ids.results }}"
+      register: retrieve_numsessions_shutdown
+      ignore_errors: yes
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed and wait_after_clear is failed'
+
+    - name: Parse number of sessions from previous output before shutdown action
+      raw: if [ "{{ item.stdout[0] }}" == "" ]; then echo "0"; else echo "{{ item.stdout[0] }}" | cut -d":" -f2 | awk '{print $1}'; fi
+      delegate_to: localhost
+      register: parse_numsessions_shutdown
+      ignore_errors: yes
+      with_items:
+        - "{{ retrieve_numsessions_shutdown.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed and wait_after_clear is failed'
+
+    - name: Shutdown candidate for scale-in groups
+      sros_config:
+        provider: "{{ cli }}"
+        timeout: 300
+        lines:
+          - configure mobile-gateway system group {{ item[0].stdout_lines | join ('\n') }} shutdown
+      with_together:
+        - "{{ group_ids.results }}"
+        - "{{ parse_numsessions_shutdown.results }}"
+      register: shutdown_groups
+      ignore_errors: yes
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed and wait_after_clear is failed and item[1].stdout_lines | join ("\n") != "0"'
+
+    - name: Check current number of sessions per group in parallel after shutdown action
+      sros_command:
+        provider: "{{ cli }}"
+        timeout: 300
+        retries: "3"
+        interval: "10"
+        commands:
+          - show mobile-gateway pdn pdn-context group {{ item[0].stdout_lines | join ('\n') }}
+        wait_for:
+          - result[0] contains "No Matching Entries"
+      with_together:
+        - "{{ group_ids.results }}"
+        - "{{ parse_numsessions_shutdown.results }}"
+      async: 1000
+      poll: 0
+      ignore_errors: yes
+      register: check_sessions_shutdown
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed and wait_after_clear is failed and item[1].stdout_lines | join ("\n") != "0"'
+
+    - name: Wait an amount of time after shutdown action and proceed when sessions are cleared
+      async_status:
+        jid: "{{ item[0].ansible_job_id }}"
+      register: wait_after_shutdown
+      retries: 100
+      delay: 10
+      until: wait_after_shutdown.finished
+      ignore_errors: yes
+      with_together:
+        - "{{ check_sessions_shutdown.results }}"
+        - "{{ parse_numsessions_shutdown.results }}"
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn and wait_suspend_timer is failed and wait_additional_time_suspend is failed and wait_after_clear is failed and item[1].stdout_lines | join ("\n") != "0"'
+
+    - name: Deconfigure session deletion rate for the specified PDN(s) and save changes permanently
+      sros_config:
+        provider: "{{ cli }}"
+        timeout: 300
+        lines:
+          - configure mobile-gateway pdn {{ item | join ('\n') }} no session-deletion-rate
+        backup: yes
+        save: yes
+      ignore_errors: yes
+      with_items:
+        - "{{ configured_pdn.results | map(attribute='stdout_lines') | list | unique }}"
+      register: deconfigure_session_deletion_rate
+      when: '("mgScaleInOperation" in resources) and gracefulScaleIn'

@@ -1,0 +1,98 @@
+heat_template_version: 2016-10-14
+
+description:
+  Isolates OAM as a complete resource together with associated ports
+
+parameters:
+
+  cbam:
+    type: json
+  resources:
+    type: json
+  prefix:
+    type: string
+    description: String to make the name of all created resources unique
+  oamMgmtIp:
+    type: string
+    description: OAM IP address
+  oamAllowedAddressPairs:
+    type: comma_delimited_list
+    description: OAM Allowed Address Pairs
+  oamSlotId:
+    type: string
+    description: OAM Slot Id
+  oamSystemIp:
+    type: string
+    description: OAM System IP address
+  oamAntiAffinityGrp:
+    type: string
+    description: OAM Anti Affinity Group
+  oamDisk1:
+    type: string
+    description: OAM CompactFlash1 Volume Id
+  oamDisk2:
+    type: string
+    description: OAM CompactFlash2 Volume Id
+  mtuSize:
+    type: string
+    description: MTU Size for Switch Fabric
+  oamMetadataIp:
+    type: string
+    description: OAM Management IP for Metadata
+  oamCsfPort:
+    type: string
+    description: OAM Control Switch Fabric Port
+  oamACsfIp:
+    type: string
+    description: OAM A Control Switch Fabric IP address
+  oamBCsfIp:
+    type: string
+    description: OAM B Control Switch Fabric IP address
+  controlSwithFabricIp:
+    type: string
+    description: OAM Control Switch Fabric IP address
+
+conditions:
+  l3Connectivity: { equals : [ { get_param: [ cbam, extensions, l3Connectivity ] }, "1"] }
+
+resources:
+ oamManagementPort:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: [ cbam, externalConnectionPoints, oamManagementECP, networkId ] }
+      security_groups: [ { get_param: [ cbam, extensions, securityGroup ] } ]
+      replacement_policy: AUTO
+      fixed_ips: [{
+         "ip_address": { get_param: oamMgmtIp }
+         }]
+      allowed_address_pairs:
+        repeat:
+          for_each:
+            <%ipaddr%>: { get_param: oamAllowedAddressPairs }
+          template:
+            ip_address: <%ipaddr%>
+
+ oamServerInstance:
+    type: OS::Nova::Server
+    depends_on: [ oamManagementPort ]
+    metadata: { "nokia_vnf_slotId": { get_param: oamSlotId }, "nokia_vnf_cardType":"OAM", "nokia_vnf_ipaddr": { get_param: oamMetadataIp }, "nokia_vnf_sysAddr": { get_param: oamSystemIp }, "nokia_vnf_scaleAspectInfo": "loadBalancerAspect:LB,mgRedundantAspect:MG" }
+    properties:
+      image_update_policy: "REBUILD"
+      name: { list_join: [ "-", [ { get_param: prefix }, OAM, { get_param: oamSlotId } ] ] }
+      image: { get_param: [ resources, imageId ] }
+      flavor: { get_param: [ resources, flavorId ] }
+      config_drive: "true"
+      user_data:
+        str_replace:
+          template: "$oamSmbiosMain$l3ConnectivityData"
+          params:
+            $oamSmbiosMain: { get_param: [ resources, smbios, main ] }
+            $l3ConnectivityData: { if: ["l3Connectivity", { list_join: [ "", [ " l3fab/0=", { get_param: controlSwithFabricIp }, { get_param: [ resources, smbios, csf ] }, ";", { get_param: oamACsfIp }, ";", { get_param: oamBCsfIp } ] ] }, ""] }
+      user_data_format: "RAW"
+      networks:
+        - port: { get_resource: oamManagementPort }
+        - port: { get_param: oamCsfPort }
+      block_device_mapping_v2: [ { boot_index: "-1", volume_id: { get_param: oamDisk1 }, device_name: "vdb" }, { boot_index: "-1", volume_id: { get_param: oamDisk2 }, device_name: "vdc" } ]
+      availability_zone: { get_param: [ resources, azId ] }
+      scheduler_hints:
+        group: { get_param: oamAntiAffinityGrp }

@@ -1,0 +1,349 @@
+---
+version: '2.0'
+name: upgrade_workbook
+workflows:
+
+  upgrade_starting:
+    input:
+      - operationType
+      - operationParams
+      - operationExecution
+      - vnfInventory
+
+    output:
+      operationParams: <% $.operationParams %>
+      operationType: <% $.operationType %>
+      vnfInventory: <% $.vnfInventory %>
+      operationExecution: <% $.operationExecution %>
+      originalResourceModel: <% $.vnfInventory.get(resourceModel, {}) %>
+      stackParams: <% $.stackParams %>
+      lbCount: <% $.lbCount %>
+      mgCount: <% $.mgCount %>
+      expectedModel: <% $.expectedModel %>
+
+    output-on-error:
+      error_message: <% $.get(error_message, 'Early failure happens in upgrade_starting') %>
+
+    tasks:
+      prepare_stack_params:
+        workflow: prepare_stack_params
+        input:
+          operationParams: <% $.operationParams %>
+          vnfInventory: <% $.vnfInventory %>
+        publish:
+           stackParams: <% task(prepare_stack_params).result.stackParams %>
+           vnfInventory: <% task(prepare_stack_params).result.vnfInventory %>
+           expectedModel: <% task(prepare_stack_params).result.expectedModel %>
+        publish-on-error:
+           error_message: <% task(prepare_stack_params).result %>
+        on-success:
+          - rg_size_change_to_0
+
+      rg_size_change_to_0:
+        action: std.javascript
+        input:
+          context:
+            stackParams: <% $.stackParams %>
+          script: |
+            lbCount = $.stackParams.cbam.resources.loadBalancerAspectGroup.count
+            mgCount = $.stackParams.cbam.resources.mgRedundantAspectGroup.count
+            $.stackParams.cbam.resources.oamAspectGroup.count = 0
+            $.stackParams.cbam.resources.mgRedundantAspectGroup.count = 0
+            $.stackParams.cbam.resources.loadBalancerAspectGroup.count = 0
+            return [$.stackParams, lbCount, mgCount]
+        publish:
+          stackParams: <% task(rg_size_change_to_0).result[0] %>
+          lbCount: <% task(rg_size_change_to_0).result[1] %>
+          mgCount: <% task(rg_size_change_to_0).result[2] %>
+        publish-on-error:
+          error_message: <% task(rg_size_change_to_0).result %>
+
+  upgrade_processing:
+    input:
+      - operationType
+      - operationParams
+      - operationExecution
+      - vnfInventory
+      - stackParams
+      - originalResourceModel
+      - expectedModel
+      - mgCount
+      - lbCount
+
+    output-on-error:
+      error_message: <% $.get(error_message, 'Early failure happens in upgrade_processing') %>
+
+    tasks:
+      delete_resources:
+        workflow: update_stack_and_wait
+        input:
+          vnfInventory: <% $.vnfInventory %>
+          stackParams: <% $.stackParams %>
+          operationType: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(delete_resources).result %>
+        on-success:
+          - change_image
+
+      change_image:
+        action: std.javascript
+        input:
+          context:
+            stackParams: <% $.stackParams %>
+            imageId: <% $.vnfInventory.nfvModel.swImages.cmgImage.vimSoftwareImageId %>
+            lbCount: <% $.lbCount %>
+            mgCount: <% $.mgCount %>
+          script: |
+            function isNumeric(n) {
+               return !isNaN(parseFloat(n)) && isFinite(n)
+            }
+            function zeroIsBlackListed(resourceGroup, rgIndex) {
+              if (rgIndex == "0") {
+                blacklistedIds = $.stackParams.cbam.resources[resourceGroup].blacklist;
+                if (blacklistedIds.indexOf("0") >= 0) {
+                  return true;
+                }
+              }
+              return false;
+            }
+            for(step in $.stackParams.cbam.resources.loadBalancerAspectGroup) {
+              if(isNumeric(step)){
+                 if (zeroIsBlackListed("loadBalancerAspectGroup", step)) {
+                   continue;
+                 }
+                 $.stackParams.cbam.resources.loadBalancerAspectGroup.count = parseInt($.lbCount)
+                 $.stackParams.cbam.resources.loadBalancerAspectGroup[step].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.imageId = $.imageId
+              }
+            }
+            for(step in $.stackParams.cbam.resources.mgRedundantAspectGroup) {
+               if(isNumeric(step)){
+                 if (zeroIsBlackListed("mgRedundantAspectGroup", step)) {
+                   continue;
+                 }
+                 $.stackParams.cbam.resources.mgRedundantAspectGroup.count = parseInt($.mgCount)
+                 $.stackParams.cbam.resources.mgRedundantAspectGroup[step].mgWorking.mgInstanceGroup["0"].mgServerInstance.imageId = $.imageId
+                 $.stackParams.cbam.resources.mgRedundantAspectGroup[step].mgProtect.mgInstanceGroup["0"].mgServerInstance.imageId = $.imageId
+               }
+            }
+            $.stackParams.cbam.resources.oamAspectGroup.count = 1
+            $.stackParams.cbam.resources.oamAspectGroup["0"].OAMActive.oamInstanceGroup["0"].oamServerInstance.imageId = $.imageId
+            $.stackParams.cbam.resources.oamAspectGroup["0"].OAMStandby.oamInstanceGroup["0"].oamServerInstance.imageId = $.imageId
+            return $.stackParams
+        publish:
+          stackParams: <% task(change_image).result %>
+        publish-on-error:
+          error_message: <% task(change_image).result %>
+        on-success:
+          - recreate_resources
+
+      recreate_resources:
+        workflow: update_stack_and_wait
+        input:
+          vnfInventory: <% $.vnfInventory %>
+          stackParams: <% $.stackParams %>
+          operationType: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(recreate_resources).result %>
+        on-success:
+          - prepare_ansible_inventory
+
+      prepare_ansible_inventory:
+        action: cbam.prepare_ansible_inventory
+        input:
+          vnf_inventory: <% $.vnfInventory %>
+        publish:
+          ansibleInventory: <% task(prepare_ansible_inventory).result %>
+        publish-on-error:
+          error_message: <% task(prepare_ansible_inventory).result %>
+        on-success:
+          - checkVms
+        on-error:
+          - query_heat_resources
+
+      checkVms:
+        action: cbam.run_playbook_extension
+        input:
+          action:
+            ansible: ansible/checkVmsUp.yaml
+          operation_parameters: <% $.operationParams %>
+          vnf_inventory: <% $.vnfInventory %>
+          stack_params: <% $.stackParams %>
+          ansible_inventory: <% $.ansibleInventory %>
+        publish-on-error:
+          error_message: <% task(checkVms).result %>
+        on-complete:
+          - query_heat_resources
+
+      query_heat_resources:
+        action: cbam.query_heat_resources
+        input:
+          stack_id: <% $.vnfInventory.get(stackId) %>
+        publish:
+          vnfInventory: <% $.vnfInventory.set(resourceModel, task(query_heat_resources).result) %>
+        publish-on-error:
+          error_message: <% task(query_heat_resources).result %>
+        on-success:
+          - add_nfv_info_to_resource_model
+
+      #Extend the resource model with NFV info with updated resources
+      add_nfv_info_to_resource_model:
+        action: cbam.add_nfv_info_to_resource_model
+        input:
+          expected_resource_model: <% $.expectedModel %>
+          resource_model: <% $.vnfInventory.resourceModel %>
+        publish:
+          vnfInventory: <% $.vnfInventory.set(resourceModel, task(add_nfv_info_to_resource_model).result) %>
+        publish-on-error:
+          error_message: <% task(add_nfv_info_to_resource_model).result %>
+        on-success:
+          - query_heat_resource_metadata
+
+      query_heat_resource_metadata:
+        action: cbam.query_heat_resource_metadata
+        input:
+          resource_model: <% $.vnfInventory.resourceModel %>
+        publish:
+          vnfInventory: <% $.vnfInventory.set(resourceModel, task(query_heat_resource_metadata).result) %>
+        publish-on-error:
+          error_message: <% task(query_heat_resource_metadata).result %>
+        on-success:
+          - update_vnf_inventory_successful_upgrade
+
+      update_vnf_inventory_successful_upgrade:
+        action: cbam.update_vnf_inventory
+        input:
+          resource_model: <% $.vnfInventory.resourceModel %>
+          nfv_model: <% $.vnfInventory.nfvModel %>
+        publish-on-error:
+          error_message: <% task(update_vnf_inventory_successful_upgrade).result %>
+
+  prepare_stack_params:
+    input:
+      - operationParams
+      - vnfInventory
+    output:
+      vnfInventory: <% $.vnfInventory %>
+      stackParams: <% $.stackParams %>
+      expectedModel: <% $.expectedModel %>
+
+    tasks:
+      # Calculate the actual resource model
+      generate_model_from_config:
+        action: cbam.generate_model_from_config
+        input:
+          vnf_template: <% $.vnfInventory.vnfTemplate %>
+          expected_nfv_model: <% $.vnfInventory.nfvModel %>
+        publish:
+          expectedModel: <% task(generate_model_from_config).result %>
+        publish-on-error:
+          error_message: <% task(generate_model_from_config).result %>
+        on-success:
+          - calculate_stack_params
+
+      # Calculate the actutal stack parameters
+      calculate_stack_params:
+        action: cbam.calculate_stack_params
+        input:
+          vnf_inventory: <% $.vnfInventory %>
+          expected_nfv_model: <% $.vnfInventory.nfvModel %>
+          expected_model: <% $.expectedModel %>
+        publish:
+          stackParams: <% task(calculate_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(calculate_stack_params).result %>
+        on-success:
+          - add_slotId_stack_params
+
+      add_slotId_stack_params:
+        action: cbam.evaluate_javascript
+        input:
+          javascript: javascript/assignSlotIDs.js
+          include: []
+          context:
+            stack_params: <% $.stackParams %>
+            resource_model: <% $.vnfInventory.resourceModel %>
+            nfv_model: <% $.vnfInventory.nfvModel %>
+            operation_params: <% $.operationParams %>
+        publish:
+          stackParams: <% task(add_slotId_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(add_slotId_stack_params).result %>
+        on-success:
+          - add_zones_stack_params
+
+      add_zones_stack_params:
+        action: cbam.evaluate_javascript
+        input:
+          javascript: javascript/assignZones.js
+          include: []
+          context:
+            stack_params: <% $.stackParams %>
+            resource_model: <% $.vnfInventory.resourceModel %>
+            nfv_model: <% $.vnfInventory.nfvModel %>
+        publish:
+          stackParams: <% task(add_zones_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(add_zones_stack_params).result %>
+        on-success:
+          - add_cpCoresAndCfp_stack_params
+
+      add_cpCoresAndCfp_stack_params:
+        action: cbam.evaluate_javascript
+        input:
+          javascript: javascript/assignCpCoresAndCfp.js
+          include: []
+          context:
+            stack_params: <% $.stackParams %>
+            resource_model: <% $.vnfInventory.resourceModel %>
+            nfv_model: <% $.vnfInventory.nfvModel %>
+            operation_params: <% $.operationParams %>
+        publish:
+          stackParams: <% task(add_cpCoresAndCfp_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(add_cpCoresAndCfp_stack_params).result %>
+        on-success:
+          - add_smbios_stack_params
+
+      add_smbios_stack_params:
+        action: cbam.evaluate_javascript
+        input:
+          javascript: javascript/generateSmbios.js
+          include: []
+          context:
+            stack_params: <% $.stackParams %>
+            resource_model: <% $.vnfInventory.resourceModel %>
+            nfv_model: <% $.vnfInventory.nfvModel %>
+            operation_params: <% $.operationParams %>
+        publish:
+          stackParams: <% task(add_smbios_stack_params).result %>
+        publish-on-error:
+          error_message: <% task(add_smbios_stack_params).result %>
+
+  update_stack_and_wait:
+    input:
+      - vnfInventory
+      - stackParams
+      - operationType
+
+    output-on-error:
+      error_message: <% $.get(error_message, 'Stack was not updated successfully') %>
+
+    tasks:
+      modify_stack_params:
+        action: cbam.manipulate_stack
+        input:
+          vnf_inventory: <% $.vnfInventory %>
+          stack_params: <% $.stackParams %>
+          operation_type: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(modify_stack_params).result %>
+        on-success:
+          - wait_for_modify_stack_params_to_finish
+
+      wait_for_modify_stack_params_to_finish:
+        action: cbam.wait_for_stack
+        input:
+          stack_id: <% $.vnfInventory.get(stackId, null) %>
+          operation_type: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(wait_for_modify_stack_params_to_finish).result %>

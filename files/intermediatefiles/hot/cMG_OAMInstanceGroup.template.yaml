@@ -1,0 +1,80 @@
+heat_template_version: 2016-10-14
+
+description:
+  Isolates OAM instance resource group
+
+parameters:
+  cbam:
+    type: json
+  resources:
+    type: json
+  prefix:
+    type: string
+    description: String to make the name of all created resources unique
+  oamAntiAffinityGrp:
+    type: string
+    description: OAM Anti Affinity Group
+  oamDisk1:
+    type: string
+    description: OAM CompactFlash 1
+  oamDisk2:
+    type: string
+    description: OAM CompactFlash 2
+  oamSystemIp:
+    type: string
+    description: OAM System IP address
+  oamAllowedAddressPairs:
+    type: comma_delimited_list
+    description: OAM Allowed Address Pairs
+  oamSlotId:
+    type: string
+    description: OAM Slot Id
+  oamMgmtIp:
+    type: string
+    description: OAM IP address
+  mtuSize:
+    type: string
+    description: MTU Size for Switch Fabric
+  oamGroup:
+    type: string
+    default: "0"
+  oamMetadataIp:
+    type: string
+    description: OAM Management IP for Metadata
+  oamCsfPort:
+    type: string
+    description: OAM Control Switch Fabric Port
+  oamACsfIp:
+    type: string
+    description: OAM A Control Switch Fabric IP address
+  oamBCsfIp:
+    type: string
+    description: OAM B Control Switch Fabric IP address
+  controlSwithFabricIp:
+    type: string
+    description: OAM Control Switch Fabric IP address
+
+resources:
+  oamInstanceGroup:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: [ resources, present ] }
+      resource_def:
+        type: cMG_OAM.template.yaml
+        properties:
+          cbam: { get_param: cbam }
+          prefix: { get_param: [ cbam, extensions, vnfHostname ] }
+          oamMgmtIp: { get_param: oamMgmtIp }
+          oamMetadataIp: { get_param: oamMetadataIp }
+          oamAllowedAddressPairs: { get_param: oamAllowedAddressPairs }
+          oamSlotId: { get_param: oamSlotId }
+          oamSystemIp: { get_param: oamSystemIp }
+          oamAntiAffinityGrp: { get_param: oamAntiAffinityGrp }
+          resources: { get_param: [ resources, oamInstanceGroup, { get_param: oamGroup }, oamServerInstance ] }
+          oamDisk1: { get_param: oamDisk1 }
+          oamDisk2: { get_param: oamDisk2 }
+          mtuSize: { get_param: mtuSize }
+          oamCsfPort: { get_param: oamCsfPort }
+          oamACsfIp: { get_param: oamACsfIp }
+          oamBCsfIp: { get_param: oamBCsfIp }
+          controlSwithFabricIp: { get_param: controlSwithFabricIp }

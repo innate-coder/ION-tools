@@ -1,0 +1,67 @@
+heat_template_version: 2016-10-14
+
+description:
+  Isolates MG instance resource group
+
+parameters:
+  cbam:
+    type: json
+  resources:
+    type: json
+  prefix:
+    type: string
+    description: String to make the name of all created resources unique
+  mgManagementNet:
+    type: string
+    description: Management network for MG
+  mgControlFabricNet:
+    type: string
+    description: Control Switch Fabric network for MG VM
+  mgType:
+    type: string
+    description: mgType either it is mgWorking or mgProtect
+  mgAntiAffinityGroup:
+    type: string
+    description: antiAffinityGroup for MG group
+  cpCores:
+    type: string
+    description: cpCores for MG
+  cfpValue:
+    type: string
+    description: compact fast path vaue for MG
+    constraints:
+     - allowed_values: [ 0, 1 ]
+  groupIndex:
+    type: string
+    description: MG Scaling Group Index
+  mtuSize:
+    type: string
+    description: MTU Size for Switch Fabric
+  oamACsfIp:
+    type: string
+    description: OAM A Control Switch Fabric IP address
+  oamBCsfIp:
+    type: string
+    description: OAM B Control Switch Fabric IP address
+
+resources:
+  mgInstanceGroup:
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: { get_param: [ resources, present ] }
+      resource_def:
+        type: cMG_MG.template.yaml
+        properties:
+          cbam: { get_param: cbam }
+          resources: { get_param: [ resources, mgInstanceGroup, "0", mgServerInstance ] }
+          mgType: { get_param: mgType}
+          prefix: { get_param: prefix }
+          mgManagementNet: { get_param: mgManagementNet }
+          mgControlFabricNet: { get_param: mgControlFabricNet }
+          mgAntiAffinityGroup: { get_param: mgAntiAffinityGroup }
+          cpCores: { get_param: cpCores }
+          cfpValue: { get_param: cfpValue }
+          groupIndex: { get_param: groupIndex }
+          mtuSize: { get_param: mtuSize }
+          oamACsfIp: { get_param: oamACsfIp }
+          oamBCsfIp: { get_param: oamBCsfIp }

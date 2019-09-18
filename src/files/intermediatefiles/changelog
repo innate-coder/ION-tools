@@ -1,2 +1,0 @@
-2019-03-29
-- Fixed: CBAM sends OAM ECP address to NSP and failed to discover the CMG (DTS316373)

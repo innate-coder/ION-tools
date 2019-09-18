@@ -1,0 +1,10 @@
+{
+  "Planecores": "14",
+  "csfFailureDetectionTimer": "100",
+  "primaryConfigFile": "cf3:\\license.txt",
+  "licenseFile": "cf3:\\config.cfg",
+  "zoneId1": "Performance-1",
+  "zoneId2": "Performance-2",
+  "controlSwitchFabricCidr": "1.0.1.0/24",
+  "mgLbManagementCidr": "1.0.4.0/24"
+}

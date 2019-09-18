@@ -1,0 +1,183 @@
+heat_template_version: 2016-10-14
+
+parameters:
+
+  cbam:
+    type: json
+
+resources:
+ oamAntiAffinityGroup:
+    type:  OS::Nova::ServerGroup
+    properties:
+      name:
+        str_replace:
+          template: "$vnfName-oamAntiAffinity"
+          params:
+            $vnfName: { get_param: [ cbam, extensions, vnfHostname ] }
+      policies:
+        - anti-affinity
+
+ loadBalancerAntiAffinityGroup:
+    type:  OS::Nova::ServerGroup
+    properties:
+      name:
+        str_replace:
+          template: "$vnfName-loadBalancerAntiAffinity"
+          params:
+            $vnfName: { get_param: [ cbam, extensions, vnfHostname ] }
+      policies:
+        - anti-affinity
+
+ controlSwitchFabricNet:
+    type: OS::Neutron::Net
+    properties:
+      name:
+        str_replace:
+          template: "$vnfName-controlSwitchFabricNet"
+          params:
+            $vnfName: { get_param: [ cbam, extensions, vnfHostname ] }
+
+ controlSwitchFabricSubnet:
+    type: OS::Neutron::Subnet
+    depends_on: [ controlSwitchFabricNet ]
+    properties:
+      cidr: { get_param: [ cbam, extensions, controlSwitchFabricCidr ] }
+      network: { get_resource: controlSwitchFabricNet }
+      gateway_ip: { get_param: [ cbam, extensions, controlSwitchFabricGatewayIp ] }
+      name:
+        str_replace:
+          template: "$vnfName-controlSwitchFabricSubnet"
+          params:
+            $vnfName: { get_param: [ cbam, extensions, vnfHostname ] }
+      enable_dhcp: False
+      ip_version: { get_param: [ cbam, resources, csfIpVersion ] }
+
+ mgAndLoadBalancerManagementNet:
+    type: OS::Neutron::Net
+    properties:
+      name:
+        str_replace:
+          template: "$vnfName-mgAndLoadBalancerManagementNet"
+          params:
+            $vnfName: { get_param: [ cbam, extensions, vnfHostname ] }
+
+ mgAndLoadBalancerManagementSubnet:
+    type: OS::Neutron::Subnet
+    depends_on: [ mgAndLoadBalancerManagementNet ]
+    properties:
+      cidr: { get_param: [ cbam, extensions, mgLbManagementCidr ] }
+      network: { get_resource: mgAndLoadBalancerManagementNet }
+      gateway_ip: { get_param: [ cbam, extensions, mgLbManagementGatewayIp ] }
+      name:
+        str_replace:
+          template: "$vnfName-mgAndLoadBalancerManagementSubnet"
+          params:
+            $vnfName: { get_param: [ cbam, extensions, vnfHostname ] }
+      enable_dhcp: False
+      ip_version: { get_param: [ cbam, resources, mgLbManagementIpVersion ] }
+
+# oamACompactFlash1:
+#    type: OS::Cinder::Volume
+#    properties:
+#      name: { list_join: [ "-", [ { get_param: [ cbam, extensions, vnfHostname ] }, OAM-A-CompactFlash1 ] ] }
+#      size:  { get_param: [ cbam, extensions, oamCompactFlash1Size ] }
+#
+# oamACompactFlash2:
+#    type: OS::Cinder::Volume
+#    properties:
+#      name: { list_join: [ "-", [ { get_param: [ cbam, extensions, vnfHostname ] }, OAM-A-CompactFlash2 ] ] }
+#      size: { get_param: [ cbam, extensions, oamCompactFlash2Size ] }
+#
+# oamBCompactFlash1:
+#    type: OS::Cinder::Volume
+#    properties:
+#      name: { list_join: [ "-", [ { get_param: [ cbam, extensions, vnfHostname ] }, OAM-B-CompactFlash1 ] ] }
+#      size:  { get_param: [ cbam, extensions, oamCompactFlash1Size ] }
+#
+# oamBCompactFlash2:
+#    type: OS::Cinder::Volume
+#    properties:
+#      name: { list_join: [ "-", [ { get_param: [ cbam, extensions, vnfHostname ] }, OAM-B-CompactFlash2 ] ] }
+#      size: { get_param: [ cbam, extensions, oamCompactFlash2Size ] }
+
+ oamAControlSwitchFabricPort:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: controlSwitchFabricNet }
+      replacement_policy: AUTO
+      security_groups: [ { get_param: [ cbam, extensions, securityGroup ] } ]
+      value_specs:
+        # extra_dhcp_opts names are vendor specific. For Nuage opt_name="mtu" should be used instead of "interface-mtu"
+        extra_dhcp_opts:
+        - {opt_name: mtu, opt_value: { get_param: [ cbam, extensions, mtu ] }}
+
+ oamBControlSwitchFabricPort:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: controlSwitchFabricNet }
+      replacement_policy: AUTO
+      security_groups: [ { get_param: [ cbam, extensions, securityGroup ] } ]
+      value_specs:
+        # extra_dhcp_opts names are vendor specific. For Nuage opt_name="mtu" should be used instead of "interface-mtu"
+        extra_dhcp_opts:
+        - {opt_name: mtu, opt_value: { get_param: [ cbam, extensions, mtu ] }}
+
+ oamAspectGroup:
+    type: OS::Heat::ResourceGroup
+    depends_on: [ controlSwitchFabricSubnet, loadBalancerAspectGroup, mgRedundantAspectGroup, oamAControlSwitchFabricPort, oamBControlSwitchFabricPort ]
+    properties:
+      count: { get_param: [ cbam, resources, oamAspectGroup, count ] }
+      resource_def:
+        type: cMG_OAMStaticAspect.template.yaml
+        properties:
+         cbam: { get_param: cbam }
+         oamAntiAffinityGrp: { get_resource: oamAntiAffinityGroup }
+         #oamADisk1: { get_resource: oamACompactFlash1 }
+         #oamADisk2: { get_resource: oamACompactFlash2 }
+         #oamBDisk1: { get_resource: oamBCompactFlash1 }
+         #oamBDisk2: { get_resource: oamBCompactFlash2 }
+         oamADisk1: { get_param: [ cbam, extensions, oamACompactFlash1Id ] }
+         oamADisk2: { get_param: [ cbam, extensions, oamACompactFlash2Id ] }
+         oamBDisk1: { get_param: [ cbam, extensions, oamBCompactFlash1Id ] }
+         oamBDisk2: { get_param: [ cbam, extensions, oamBCompactFlash2Id ] }
+         oamACsfIp: { get_attr: [oamAControlSwitchFabricPort, fixed_ips, 0, ip_address] }
+         oamBCsfIp: { get_attr: [oamBControlSwitchFabricPort, fixed_ips, 0, ip_address] }
+         oamACsfPort: { get_resource: oamAControlSwitchFabricPort }
+         oamBCsfPort: { get_resource: oamBControlSwitchFabricPort }
+
+ loadBalancerAspectGroup:
+   type: OS::Heat::ResourceGroup
+   depends_on: [ controlSwitchFabricSubnet, mgAndLoadBalancerManagementSubnet, oamAControlSwitchFabricPort, oamBControlSwitchFabricPort ]
+   properties:
+     count: { get_param: [cbam, resources, loadBalancerAspectGroup, count ] }
+     removal_policies: [ { "resource_list": { get_param: [ cbam, resources, loadBalancerAspectGroup, blacklist] } } ]
+     resource_def:
+       type: cMG_LBInstanceGroup.template.yaml
+       properties:
+         cbam: { get_param: cbam }
+         prefix: { get_param: [ cbam, extensions, vnfHostname ] }
+         resources: { get_param: [ cbam, resources, loadBalancerAspectGroup ] }
+         loadBalancerMangementNet: { get_resource: mgAndLoadBalancerManagementNet }
+         loadBalancerFabricNet: { get_resource: controlSwitchFabricNet }
+         rg_index: '%index%'
+         loadBalancerAllowedAddressPairList: { get_param: [ cbam, extensions, externalIpAddressList ] }
+         loadBalancerAntiAffinityGrp: { get_resource: loadBalancerAntiAffinityGroup }
+         mtuSize: { get_param: [ cbam, extensions, mtu ] }
+         oamACsfIp: { get_attr: [oamAControlSwitchFabricPort, fixed_ips, 0, ip_address] }
+         oamBCsfIp: { get_attr: [oamBControlSwitchFabricPort, fixed_ips, 0, ip_address] }
+
+ mgRedundantAspectGroup:
+   type: OS::Heat::ResourceGroup
+   depends_on: [ controlSwitchFabricSubnet,mgAndLoadBalancerManagementSubnet, oamAControlSwitchFabricPort, oamBControlSwitchFabricPort ]
+   properties:
+     count: { get_param: [cbam, resources, mgRedundantAspectGroup, count ] }
+     removal_policies: [ { "resource_list": { get_param: [ cbam, resources, mgRedundantAspectGroup, blacklist] } } ]
+     resource_def:
+       type: cMG_MGScalingAspect.template.yaml
+       properties:
+         cbam: { get_param: cbam }
+         mgManagementNet: { get_resource: mgAndLoadBalancerManagementNet }
+         mgControlFabricNet: { get_resource: controlSwitchFabricNet }
+         rg_index: '%index%'
+         oamACsfIp: { get_attr: [oamAControlSwitchFabricPort, fixed_ips, 0, ip_address] }
+         oamBCsfIp: { get_attr: [oamBControlSwitchFabricPort, fixed_ips, 0, ip_address] }

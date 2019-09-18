@@ -4,12 +4,12 @@ import java.util.ArrayList;
 
 public class CMgCbamGrantless implements MainModelClass {
 
+	private ArrayList<Vims> vims;
     private String flavourId;
     private String instantiationLevelId;
-    private boolean grantlessMode;
-    private ArrayList<Vims> vims;
-    private ArrayList<ExtVirtualLinks> extVirtualLinks;
     private ArrayList<ExtManagedVirtualLinks> extManagedVirtualLinks;
+    private ArrayList<ExtVirtualLinks> extVirtualLinks;
+    private boolean grantlessMode; 
     private ArrayList<ComputeResourceFlavours> computeResourceFlavours;
     private ArrayList<SoftwareImages> softwareImages;
     private ArrayList<Zones> zones;
@@ -129,9 +129,9 @@ public class CMgCbamGrantless implements MainModelClass {
     }
 
     public static class ExtVirtualLinks {
-
-        private String resourceId;
+        
         private ArrayList<ExtCps> extCps;
+        private String resourceId;
 
         public ArrayList<ExtCps> getExtCps() {
             return extCps;
@@ -151,8 +151,9 @@ public class CMgCbamGrantless implements MainModelClass {
 
 
         public static class ExtCps {
-            private String cpdId;
-            private ArrayList<Addresses> addresses;
+        	
+        	private ArrayList<Addresses> addresses;
+            private String cpdId;            
 
             public ArrayList<Addresses> getAddresses() {
                 return addresses;
@@ -239,13 +240,11 @@ public class CMgCbamGrantless implements MainModelClass {
     }
 
     public static class Vims {
-
-        private String id;
-        private String interfaceEndpoint;
-
+     
         private InterfaceInfo interfaceInfo;
-
+        private String id;
         private AccessInfo accessInfo;
+        private String interfaceEndpoint;
 
 
         public String getInterfaceEndpoint() {
