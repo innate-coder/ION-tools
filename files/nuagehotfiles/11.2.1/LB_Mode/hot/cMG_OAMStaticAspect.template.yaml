@@ -1,0 +1,80 @@
+heat_template_version: 2016-10-14
+
+description:
+  Isolates OAM active and standby groups
+
+parameters:
+  cbam:
+    type: json
+  oamAntiAffinityGrp:
+    type: string
+    description: OAM Anti Affinity Group
+  oamADisk1:
+    type: string
+    description: OAM Active CompactFlash 1
+  oamADisk2:
+    type: string
+    description: OAM Active CompactFlash 2
+  oamBDisk1:
+    type: string
+    description: OAM Standby CompactFlash 1
+  oamBDisk2:
+    type: string
+    description: OAM Standby CompactFlash 2
+  oamGroup:
+    type: string
+    default: "0"
+  oamACsfPort:
+    type: string
+    description: OAM Active Control Switch Fabric Port
+  oamBCsfPort:
+    type: string
+    description: OAM Standby Control Switch Fabric Port
+  oamACsfIp:
+    type: string
+    description: OAM A Control Switch Fabric IP address
+  oamBCsfIp:
+    type: string
+    description: OAM B Control Switch Fabric IP address
+
+resources:
+
+ OAMActive:
+    type: cMG_OAMInstanceGroup.template.yaml
+    properties:
+      cbam: { get_param: cbam }
+      prefix: { get_param: [ cbam, extensions, vnfHostname ] }
+      oamMgmtIp: { get_param: [ cbam, externalConnectionPoints, oamManagementECP, addresses, 0 , ip ] }
+      oamMetadataIp: { get_param: [ cbam, resources, oamActiveManagementIp ] }
+      oamAllowedAddressPairs: { get_param: [ cbam, resources, oamAllowedAddressPairsA ] }
+      oamSlotId: A
+      oamSystemIp: { get_param: [ cbam, extensions, systemIpAddr ] }
+      oamAntiAffinityGrp: { get_param: oamAntiAffinityGrp }
+      resources: { get_param: [ cbam, resources, oamAspectGroup, { get_param: oamGroup }, OAMActive ] }
+      oamDisk1: { get_param: oamADisk1 }
+      oamDisk2: { get_param: oamADisk2 }
+      mtuSize: { get_param: [ cbam, extensions, mtu ] }
+      oamCsfPort: { get_param: oamACsfPort }
+      oamACsfIp: { get_param: [ cbam, resources, csfDefaultGwIp] }
+      oamBCsfIp: { get_param: oamBCsfIp }
+      controlSwithFabricIp: { get_param: oamACsfIp }
+
+ OAMStandby:
+    type: cMG_OAMInstanceGroup.template.yaml
+    properties:
+      cbam: { get_param: cbam }
+      prefix: { get_param: [ cbam, extensions, vnfHostname ] }
+      oamMgmtIp: { get_param: [ cbam, externalConnectionPoints, oamManagementECP, addresses, 1 , ip ] }
+      oamMetadataIp: { get_param: [ cbam, resources, oamStandbyManagementIp ] }
+      oamAllowedAddressPairs: { get_param: [ cbam, resources, oamAllowedAddressPairsB ] }
+      oamSlotId: B
+      oamSystemIp: { get_param: [ cbam, extensions, systemIpAddr ] }
+      oamAntiAffinityGrp: { get_param: oamAntiAffinityGrp }
+      resources: { get_param: [ cbam, resources, oamAspectGroup, { get_param: oamGroup }, OAMStandby ] }
+      oamDisk1: { get_param: oamBDisk1 }
+      oamDisk2: { get_param: oamBDisk2 }
+      mtuSize: { get_param: [ cbam, extensions, mtu ] }
+      oamCsfPort: { get_param: oamBCsfPort }
+      oamACsfIp: { get_param: oamACsfIp }
+      oamBCsfIp: { get_param: [ cbam, resources, csfDefaultGwIp] }
+      controlSwithFabricIp: { get_param: oamBCsfIp }

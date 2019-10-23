@@ -3,6 +3,10 @@ version: '2.0'
 name: upgrade_workbook
 workflows:
 
+#######################################
+################ MAIN #################
+#######################################
+
   upgrade_starting:
     input:
       - operationType
@@ -74,14 +78,24 @@ workflows:
       error_message: <% $.get(error_message, 'Early failure happens in upgrade_processing') %>
 
     tasks:
-      delete_resources:
-        workflow: update_stack_and_wait
+      modify_stack_params:
+        action: cbam.manipulate_stack
         input:
-          vnfInventory: <% $.vnfInventory %>
-          stackParams: <% $.stackParams %>
-          operationType: <% $.operationType %>
+          vnf_inventory: <% $.vnfInventory %>
+          stack_params: <% $.stackParams %>
+          operation_type: <% $.operationType %>
         publish-on-error:
-          error_message: <% task(delete_resources).result %>
+          error_message: <% task(modify_stack_params).result %>
+        on-success:
+          - wait_for_modify_stack_params_to_finish
+
+      wait_for_modify_stack_params_to_finish:
+        action: cbam.wait_for_stack
+        input:
+          stack_id: <% $.vnfInventory.get(stackId, null) %>
+          operation_type: <% $.operationType %>
+        publish-on-error:
+          error_message: <% task(wait_for_modify_stack_params_to_finish).result %>
         on-success:
           - change_image
 
@@ -134,16 +148,22 @@ workflows:
         publish-on-error:
           error_message: <% task(change_image).result %>
         on-success:
-          - recreate_resources
+          - update_stack_change
 
-      recreate_resources:
-        workflow: update_stack_and_wait
+      update_stack_change:
+        workflow: cbam_main_action
         input:
           vnfInventory: <% $.vnfInventory %>
           stackParams: <% $.stackParams %>
+          expectedNfvModel: <% $.vnfInventory.nfvModel %>
+          expectedModel: <% $.expectedModel %>
           operationType: <% $.operationType %>
+          originalResourceModel: <% $.originalResourceModel %>
+        publish:
+          vnfInventory: <% task(update_stack_change).result.vnfInventory %>
         publish-on-error:
-          error_message: <% task(recreate_resources).result %>
+          vnfInventory: <% task(update_stack_change).result.vnfInventory %>
+          error_message: <% task(update_stack_change).result.error_message %>
         on-success:
           - prepare_ansible_inventory
 
@@ -157,8 +177,6 @@ workflows:
           error_message: <% task(prepare_ansible_inventory).result %>
         on-success:
           - checkVms
-        on-error:
-          - query_heat_resources
 
       checkVms:
         action: cbam.run_playbook_extension
@@ -171,41 +189,6 @@ workflows:
           ansible_inventory: <% $.ansibleInventory %>
         publish-on-error:
           error_message: <% task(checkVms).result %>
-        on-complete:
-          - query_heat_resources
-
-      query_heat_resources:
-        action: cbam.query_heat_resources
-        input:
-          stack_id: <% $.vnfInventory.get(stackId) %>
-        publish:
-          vnfInventory: <% $.vnfInventory.set(resourceModel, task(query_heat_resources).result) %>
-        publish-on-error:
-          error_message: <% task(query_heat_resources).result %>
-        on-success:
-          - add_nfv_info_to_resource_model
-
-      #Extend the resource model with NFV info with updated resources
-      add_nfv_info_to_resource_model:
-        action: cbam.add_nfv_info_to_resource_model
-        input:
-          expected_resource_model: <% $.expectedModel %>
-          resource_model: <% $.vnfInventory.resourceModel %>
-        publish:
-          vnfInventory: <% $.vnfInventory.set(resourceModel, task(add_nfv_info_to_resource_model).result) %>
-        publish-on-error:
-          error_message: <% task(add_nfv_info_to_resource_model).result %>
-        on-success:
-          - query_heat_resource_metadata
-
-      query_heat_resource_metadata:
-        action: cbam.query_heat_resource_metadata
-        input:
-          resource_model: <% $.vnfInventory.resourceModel %>
-        publish:
-          vnfInventory: <% $.vnfInventory.set(resourceModel, task(query_heat_resource_metadata).result) %>
-        publish-on-error:
-          error_message: <% task(query_heat_resource_metadata).result %>
         on-success:
           - update_vnf_inventory_successful_upgrade
 
@@ -217,6 +200,9 @@ workflows:
         publish-on-error:
           error_message: <% task(update_vnf_inventory_successful_upgrade).result %>
 
+#######################################
+######## Prepare Stack Params ########
+#######################################
   prepare_stack_params:
     input:
       - operationParams
@@ -318,32 +304,3 @@ workflows:
           stackParams: <% task(add_smbios_stack_params).result %>
         publish-on-error:
           error_message: <% task(add_smbios_stack_params).result %>
-
-  update_stack_and_wait:
-    input:
-      - vnfInventory
-      - stackParams
-      - operationType
-
-    output-on-error:
-      error_message: <% $.get(error_message, 'Stack was not updated successfully') %>
-
-    tasks:
-      modify_stack_params:
-        action: cbam.manipulate_stack
-        input:
-          vnf_inventory: <% $.vnfInventory %>
-          stack_params: <% $.stackParams %>
-          operation_type: <% $.operationType %>
-        publish-on-error:
-          error_message: <% task(modify_stack_params).result %>
-        on-success:
-          - wait_for_modify_stack_params_to_finish
-
-      wait_for_modify_stack_params_to_finish:
-        action: cbam.wait_for_stack
-        input:
-          stack_id: <% $.vnfInventory.get(stackId, null) %>
-          operation_type: <% $.operationType %>
-        publish-on-error:
-          error_message: <% task(wait_for_modify_stack_params_to_finish).result %>

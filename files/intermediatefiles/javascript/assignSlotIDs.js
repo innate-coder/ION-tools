@@ -5,28 +5,28 @@ $.stack_params.cbam.extensions.externalIpAddressList = str.split(',');
 // These should be inline with TOSCA *until we find a way to read them dynamically---
 //LB
 var min_number_of_instances_lb = 2; //capabilities::deployment_flavour::properties::vdu_profile::loadBalancerServer::min_number_of_instances
-var max_scale_level_lb = 8;         //capabilities::deployment_flavour::properties::scaling_aspects::loadBalancerAspect::max_scale_level
+var max_scale_level_lb = 2;         //capabilities::deployment_flavour::properties::scaling_aspects::loadBalancerAspect::max_scale_level
 //MG
 var min_number_of_instances_mg = 1; //capabilities::deployment_flavour::properties::vdu_profile::mgServer::min_number_of_instances
 var max_scale_level_mg = 9;         //capabilities::deployment_flavour::properties::scaling_aspects::mgRedundantAspect::max_scale_level
-
+// --- These should be inline with TOSCA
 // conf
+var reserveLBSlots=true;
 var useLbECPs=true;
-var useMgECPs=false;
+var useMgECPs=true;
 var debugLog=false;
 // init
 var cCBAM = new classCBAM();
 var cLog = new classLog();
 var cSlot = new classSlotID();
 var cECPs = new classECP();
-var cImage = new classImage();
 var cAnsibleCheckVMs = new classAnsibleCheckVMs();
 
 var lbRgIndexes = cCBAM.getLbRgIndexes();
 var mgRgIndexes = cCBAM.getMgRgIndexes();
 
 //main
-if (cCBAM.operationIsInstantiation() || cCBAM.operationIsHealing() || cCBAM.operationIsUpgrade() || cCBAM.operationIsAASignatureUpdate())
+if (cCBAM.operationIsInstantiation() || cCBAM.operationIsHealing() || cCBAM.operationIsUpgrade() || cCBAM.operationIsReInstantiate())
 {
     var slotIDmarker = cSlot.firstPossibleSlotIDforLB();
     var slotID = -1;
@@ -38,14 +38,24 @@ if (cCBAM.operationIsInstantiation() || cCBAM.operationIsHealing() || cCBAM.oper
             slotID = slotIDmarker++;
         }
         else {//Heal/Upgrade
-            slotID = $.resource_model.resources.loadBalancerAspectGroup.resources[lbRgIndexes[iter]].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId;
+          if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+              slotID = $.resource_model.resources.loadBalancerAspectGroup.resources[lbRgIndexes[iter]].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId;
+          }
+          else {
+              slotID = $.resource_model.resources.loadBalancerAspectGroup.resources[lbRgIndexes[iter]].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId;
+          }
         }
 
         cSlot.assignToLB(lbRgIndexes[iter], slotID);
         cECPs.assignToLB(lbRgIndexes[iter], slotID);
-        cImage.assignToLB(lbRgIndexes[iter]);
+
         cCBAM.assignVmPresence("LB", lbRgIndexes[iter]);
         cAnsibleCheckVMs.addSlot(slotID);
+    }
+
+    //if LB Slots are reserved
+    if (reserveLBSlots) {
+        slotIDmarker = cSlot.firstPossibleSlotIDforMG();
     }
 
     //MGs
@@ -56,11 +66,15 @@ if (cCBAM.operationIsInstantiation() || cCBAM.operationIsHealing() || cCBAM.oper
             slotID = slotIDmarker++;
         }
         else {//Heal/Upgrade
-            slotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+            if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()) {
+              slotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgServerInstance.metadata.nokia_vnf_slotId;
+            }
+            else {
+              slotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+            }
         }
         cSlot.assignToMgWorking(mgRgIndexes[iter], slotID);
         cECPs.assignToMgWorking(mgRgIndexes[iter]);
-        cImage.assignToMgWorking(mgRgIndexes[iter]);
         cAnsibleCheckVMs.addSlot(slotID);
 
         //mgProtect
@@ -68,11 +82,15 @@ if (cCBAM.operationIsInstantiation() || cCBAM.operationIsHealing() || cCBAM.oper
             slotID = slotIDmarker++;
         }
         else { //Heal/Upgrade
-            slotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+            if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+              slotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgProtect.resources.mgServerInstance.metadata.nokia_vnf_slotId;
+            } else {
+              slotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+            }
         }
         cSlot.assignToMgProtect(mgRgIndexes[iter], slotID);
         cECPs.assignToMgProtect(mgRgIndexes[iter]);
-        cImage.assignToMgProtect(mgRgIndexes[iter]);
+
         cCBAM.assignVmPresence("MG", mgRgIndexes[iter]);
         cAnsibleCheckVMs.addSlot(slotID);
     }
@@ -86,8 +104,6 @@ else if (cCBAM.operationIsScaling())
     var mgScaleWorkingSlotId = [];
     var mgScaleProtectSlotId = [];
     var mgGroupIdAnsible = [];
-    var lbScaleSlotId = [];
-    var lbGroupIdAnsible = [];
 
     if (cCBAM.operationIsScaleOUT())
     {
@@ -106,22 +122,20 @@ else if (cCBAM.operationIsScaling())
 
                 //add slotID for ansible checkVM
                 cAnsibleCheckVMs.addSlot(lbSlotId);
-
-                //fill arrays with LB scaled node slot ids for ansible
-                lbScaleSlotId.push(parseInt(lbSlotId));
-
-                var candidateGroupId = parseInt($.stack_params.cbam.resources.loadBalancerAspectGroup[lbRgIndexes[iter]]._mappedIndex) + 1;
-                lbGroupIdAnsible.push(parseInt(candidateGroupId));
             }
             else
             {
                 //read x.slotID from deployed resource
-                lbSlotId = $.resource_model.resources.loadBalancerAspectGroup.resources[lbRgIndexes[iter]].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId;
+                if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+                  lbSlotId = $.resource_model.resources.loadBalancerAspectGroup.resources[lbRgIndexes[iter]].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId;
+                } else {
+                  lbSlotId = $.resource_model.resources.loadBalancerAspectGroup.resources[lbRgIndexes[iter]].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId;
+                }
             }
             cSlot.assignToLB(lbRgIndexes[iter], lbSlotId);
             cECPs.assignToLB(lbRgIndexes[iter], lbSlotId);
             cCBAM.assignVmPresence("LB", lbRgIndexes[iter]);
-            cImage.assignToLB(lbRgIndexes[iter]);
+
         }
         //MGs
         for (var iter = 0; iter < mgRgIndexes.length; iter++)
@@ -152,28 +166,31 @@ else if (cCBAM.operationIsScaling())
             else
             {
                 //read slotID from deployed resource
-                workingSlotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
-                protectSlotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+                if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+                  workingSlotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgServerInstance.metadata.nokia_vnf_slotId;
+                  protectSlotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgProtect.resources.mgServerInstance.metadata.nokia_vnf_slotId;
+                }
+                else {
+                  workingSlotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+                  protectSlotID = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+                }
             }
 
             //mgWorking
             cSlot.assignToMgWorking(mgRgIndexes[iter], workingSlotID);
             cECPs.assignToMgWorking(mgRgIndexes[iter]);
-            cImage.assignToMgWorking(mgRgIndexes[iter]);
 
             //mgProtect
             cSlot.assignToMgProtect(mgRgIndexes[iter], protectSlotID);
             cECPs.assignToMgProtect(mgRgIndexes[iter]);
-            cImage.assignToMgProtect(mgRgIndexes[iter]);
 
             cCBAM.assignVmPresence("MG", mgRgIndexes[iter]);
 
         }
 
-        //add MG-LB scaling group ids and MG-LB scaled node slot ids for ansible
+        //add MG scaling group ids and MG scaled node slot ids for ansible
 
         cCBAM.assignMgScalingIds();
-        cCBAM.assignLbScalingIds();
 
     }
     else if (cCBAM.operationIsScaleIN())
@@ -182,36 +199,43 @@ else if (cCBAM.operationIsScaling())
         //read slotIDs from deployed resources
         for (var iter = 0; iter < lbRgIndexes.length; iter++)
         {
-            var existingLbSlotId = $.resource_model.resources.loadBalancerAspectGroup.resources[lbRgIndexes[iter]].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId;
+            if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+              var existingLbSlotId = $.resource_model.resources.loadBalancerAspectGroup.resources[lbRgIndexes[iter]].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId;
+            }
+            else {
+              var existingLbSlotId = $.resource_model.resources.loadBalancerAspectGroup.resources[lbRgIndexes[iter]].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId;
+            }
 
             cSlot.assignToLB(lbRgIndexes[iter], existingLbSlotId);
             cECPs.assignToLB(lbRgIndexes[iter], existingLbSlotId);
-            cImage.assignToLB(lbRgIndexes[iter]);
             cCBAM.assignVmPresence("LB", lbRgIndexes[iter]);
 
         }
 
         for (var iter = 0; iter < mgRgIndexes.length; iter++)
         {
-            var workingSlot = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
-            var protectSlot = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+            if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+              var workingSlot = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgServerInstance.metadata.nokia_vnf_slotId;
+              var protectSlot = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgProtect.resources.mgServerInstance.metadata.nokia_vnf_slotId;
+            }
+            else {
+              var workingSlot = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+              var protectSlot = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId;
+            }
 
             //mgWorking
             cSlot.assignToMgWorking(mgRgIndexes[iter],workingSlot);
             cECPs.assignToMgWorking(mgRgIndexes[iter]);
-            cImage.assignToMgProtect(mgRgIndexes[iter]);
 
             //mgProtect
             cSlot.assignToMgProtect(mgRgIndexes[iter],protectSlot);
             cECPs.assignToMgProtect(mgRgIndexes[iter]);
-            cImage.assignToMgProtect(mgRgIndexes[iter]);
 
             cCBAM.assignVmPresence("MG", mgRgIndexes[iter]);
 
         }
 
         cCBAM.assignMgScalingIds();
-        cCBAM.assignLbScalingIds();
 
     }
     else
@@ -234,8 +258,6 @@ else //no valid operation
 $.stack_params.cbam.resources.slotIdAnsible = cAnsibleCheckVMs.getList().toString();
 $.stack_params.cbam.resources.oamAspectGroup.count = 1;
 cCBAM.assignOAMIps();
-cImage.assignToOAMActive();
-cImage.assignToOAMStandby();
 cCBAM.assignVmPresence("OAM", "0");
 return $.stack_params;
 
@@ -246,25 +268,24 @@ return $.stack_params;
 function classCBAM() {
     //declare public members
     this.operationIsInstantiation = operationIsInstantiation;
-    this.operationIsScaling = operationIsScaling;
-    this.operationIsHealing = operationIsHealing;
-    this.operationIsUpgrade = operationIsUpgrade;
-    this.operationIsScaleOUT = operationIsScaleOUT;
-    this.operationIsScaleIN = operationIsScaleIN;
-    this.operationIsAASignatureUpdate = operationIsAASignatureUpdate;
-    this.differenceOfGroupIndexes = differenceOfGroupIndexes;
-    this.isNumeric = isNumeric;
-    this.checkNested = checkNested;
-    this.numberofScalingStepsLB = numberofScalingStepsLB;
-    this.numberofScalingStepsMG = numberofScalingStepsMG;
-    this.getMaximumAllowedVMs = getMaximumAllowedVMs;
-    this.assignMgScalingIds = assignMgScalingIds;
-    this.assignLbScalingIds = assignLbScalingIds;
-    this.getAllowedAddressPairsIP = getAllowedAddressPairsIP;
-    this.assignOAMIps = assignOAMIps;
-    this.getLbRgIndexes = getLbRgIndexes;
-    this.getMgRgIndexes = getMgRgIndexes;
-    this.assignVmPresence = assignVmPresence;
+    this.operationIsScaling       = operationIsScaling;
+    this.operationIsHealing       = operationIsHealing;
+    this.operationIsUpgrade       = operationIsUpgrade;
+    this.operationIsReInstantiate = operationIsReInstantiate;
+    this.operationIsScaleOUT      = operationIsScaleOUT;
+    this.operationIsScaleIN       = operationIsScaleIN;
+    this.differenceOfGroupIndexes          = differenceOfGroupIndexes;
+    this.isNumeric     = isNumeric;
+    this.checkNested   = checkNested;
+    this.numberofScalingStepsLB          = numberofScalingStepsLB;
+    this.numberofScalingStepsMG          = numberofScalingStepsMG;
+    this.getMaximumAllowedVMs     = getMaximumAllowedVMs;
+    this.assignMgScalingIds         = assignMgScalingIds;
+    this.assignOAMIps            = assignOAMIps;
+    this.getLbRgIndexes          = getLbRgIndexes;
+    this.getMgRgIndexes          = getMgRgIndexes;
+    this.instantiatedPackageIsOld  = instantiatedPackageIsOld;
+    this.assignVmPresence        = assignVmPresence;
 
     //private variables
     var max_number_of_allowed_VMs = 20;
@@ -276,13 +297,12 @@ function classCBAM() {
         checkMinimumScalingLevel();
         checkMaximumScalingLevel();
         checkMtuRange();
-        checkCupsLBscaling();
 
     }
     init();
 
     //private functions
-    function getMaximumAllowedVMs() { return max_number_of_allowed_VMs; }
+    function getMaximumAllowedVMs() {  return max_number_of_allowed_VMs;   }
 
     function checkMinimumScalingLevel() {
 
@@ -359,15 +379,9 @@ function classCBAM() {
         }
     }
 
-    function checkCupsLBscaling() {
-        if (($.stack_params.cbam.extensions.cupsMode == true) && ($.operation_params.aspectId == "loadBalancerAspect")) {
-            throw new Error('Scaling LB nodes is not allowed when CUPS mode is enabled');
-        }
-    }
-
     function operationIsInstantiation() {
 
-        if ($.operation_params.flavourId != undefined) {
+        if ($.operation_params.instantiationLevelId != undefined) {
             if ($.resource_model.resources == undefined) {
                 return true;
             }
@@ -395,11 +409,10 @@ function classCBAM() {
 
         return false;
     }
-
-    function operationIsAASignatureUpdate() {
+    function operationIsReInstantiate() {
 
         if ($.operation_params.additionalParams != undefined) {
-            if ($.operation_params.additionalParams.vmReInstantiation != undefined) {
+            if ($.operation_params.additionalParams.vnfcToReInstantiate != undefined) {
                 return true;
             }
         }
@@ -409,7 +422,15 @@ function classCBAM() {
 
     function operationIsUpgrade() {
 
-        if (!operationIsInstantiation() && !operationIsScaling() && !operationIsHealing() && !operationIsAASignatureUpdate()) {
+        if (!operationIsInstantiation() && !operationIsScaling() && !operationIsHealing() && !operationIsReInstantiate()) {
+            return true;
+        }
+        return false;
+    }
+
+    function instantiatedPackageIsOld() {
+
+        if($.resource_model.resources.oamAspectGroup.resources["0"].resources.OAMActive.resources.oamInstanceGroup == undefined) {
             return true;
         }
         return false;
@@ -462,47 +483,19 @@ function classCBAM() {
         return temp.sort((a,b) => a-b);
     }
 
-    function getAllowedAddressPairsIP (oamManagementIp) {
-
-        if (oamManagementIp.indexOf(".") !=-1) {
-            var allowedAddressPairsIP = oamManagementIp;
-        }
-        else if (oamManagementIp.indexOf(":") !=-1) {
-            var allowedAddressPairsIP = oamManagementIp;
-        }
-        else {
-            throw new Error("Invalid OAM Management IP address was provided")
-        }
-
-        return allowedAddressPairsIP;
-
-    }
-
     function assignOAMIps() {
 
         if ( $.stack_params.cbam.extensions.oamActiveVirtualIp == "" && $.stack_params.cbam.extensions.oamStandbyVirtualIp == "" ) {
-            var oamActiveManagementIp = $.stack_params.cbam.externalConnectionPoints.oamManagementECP.addresses[0].ip;
-            var oamStandbyManagementIp = $.stack_params.cbam.externalConnectionPoints.oamManagementECP.addresses[1].ip;
-
-            var allowedAddressPairsActiveIP = getAllowedAddressPairsIP(oamActiveManagementIp);
-            var allowedAddressPairsStandbyIP = getAllowedAddressPairsIP(oamStandbyManagementIp);
-
-            $.stack_params.cbam.resources.oamActiveManagementIp = oamActiveManagementIp;
-            $.stack_params.cbam.resources.oamStandbyManagementIp = oamStandbyManagementIp;
-            $.stack_params.cbam.resources.oamAllowedAddressPairsA = allowedAddressPairsStandbyIP;
-            $.stack_params.cbam.resources.oamAllowedAddressPairsB = allowedAddressPairsActiveIP;
+            $.stack_params.cbam.resources.oamActiveManagementIp = $.stack_params.cbam.externalConnectionPoints.oamManagementECP.addresses[0].ip;
+            $.stack_params.cbam.resources.oamStandbyManagementIp = $.stack_params.cbam.externalConnectionPoints.oamManagementECP.addresses[1].ip;
+            $.stack_params.cbam.resources.oamAllowedAddressPairsA = $.stack_params.cbam.externalConnectionPoints.oamManagementECP.addresses[1].ip;
+            $.stack_params.cbam.resources.oamAllowedAddressPairsB = $.stack_params.cbam.externalConnectionPoints.oamManagementECP.addresses[0].ip;
         }
         else {
-            var oamActiveManagementIp = $.stack_params.cbam.extensions.oamActiveVirtualIp;
-            var oamStandbyManagementIp = $.stack_params.cbam.extensions.oamStandbyVirtualIp;
-
-            var allowedAddressPairsActiveIP = getAllowedAddressPairsIP(oamActiveManagementIp);
-            var allowedAddressPairsStandbyIP = getAllowedAddressPairsIP(oamStandbyManagementIp);
-
-            $.stack_params.cbam.resources.oamActiveManagementIp = oamActiveManagementIp;
-            $.stack_params.cbam.resources.oamStandbyManagementIp = oamStandbyManagementIp;
-            $.stack_params.cbam.resources.oamAllowedAddressPairsA = allowedAddressPairsActiveIP + "," + allowedAddressPairsStandbyIP;
-            $.stack_params.cbam.resources.oamAllowedAddressPairsB = allowedAddressPairsActiveIP + "," + allowedAddressPairsStandbyIP;
+            $.stack_params.cbam.resources.oamActiveManagementIp = $.stack_params.cbam.extensions.oamActiveVirtualIp;
+            $.stack_params.cbam.resources.oamStandbyManagementIp = $.stack_params.cbam.extensions.oamStandbyVirtualIp;
+            $.stack_params.cbam.resources.oamAllowedAddressPairsA = $.stack_params.cbam.extensions.oamActiveVirtualIp + "," + $.stack_params.cbam.extensions.oamStandbyVirtualIp;
+            $.stack_params.cbam.resources.oamAllowedAddressPairsB = $.stack_params.cbam.extensions.oamStandbyVirtualIp + "," + $.stack_params.cbam.extensions.oamActiveVirtualIp;
         }
 
         var oamAllowedAddressPairsA = $.stack_params.cbam.resources.oamAllowedAddressPairsA;
@@ -603,52 +596,6 @@ function classCBAM() {
       return true;
     }
 
-    function assignLbScalingIds () {
-
-      var tempLbExistingGroupIndexes = [];
-      var tempLbGroupIndexesAfterScaleIn = [];
-      var tempScaleInLbGroupIds = [];
-
-      if (operationIsScaleIN()) {
-        for ( step in $.resource_model.resources.loadBalancerAspectGroup.resources ) {
-            if (isNumeric(step)){
-                tempLbExistingGroupIndexes.push(step)
-            }
-        }
-
-        for(step in $.stack_params.cbam.resources.loadBalancerAspectGroup) {
-            if (isNumeric(step)){
-                tempLbGroupIndexesAfterScaleIn.push(step)
-            }
-        }
-
-        tempScaleInLbGroupIds = differenceOfGroupIndexes(tempLbExistingGroupIndexes, tempLbGroupIndexesAfterScaleIn);
-
-        for ( var iter = 0; iter < tempScaleInLbGroupIds.length; iter++ ) {
-          if (checkNested($.resource_model, 'resources', 'loadBalancerAspectGroup', 'resources', tempScaleInLbGroupIds[iter], 'resources', 'loadBalancerInstanceGroup', 'resources', '0', 'resources', 'loadBalancerServerInstance', 'metadata')) {
-
-            lbScaleSlotId.push(parseInt($.resource_model.resources.loadBalancerAspectGroup.resources[tempScaleInLbGroupIds[iter]].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId));
-            var lbCandidateGroupId = parseInt($.resource_model.resources.loadBalancerAspectGroup.resources[tempScaleInLbGroupIds[iter]].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_groupIndex);
-            lbGroupIdAnsible.push(parseInt(lbCandidateGroupId)+1);
-          }
-        }
-      }
-
-      if ( lbScaleSlotId.length > 0 ) {
-          $.stack_params.cbam.resources.lbGroupIdAnsible = "['" + lbGroupIdAnsible.join("','") + "']";
-          $.stack_params.cbam.resources.lbScaleSlotId = "['" + lbScaleSlotId.join("','") + "']";
-
-          if (operationIsScaleOUT()) {
-
-              $.stack_params.cbam.resources.lbScaleOutOperation = null;
-          }
-          else {
-              $.stack_params.cbam.resources.lbScaleInOperation = null;
-          }
-      }
-      return true;
-    }
-
     function assignVmPresence(nodeType, rgIndex) {
 
       if (nodeType == "LB") {
@@ -685,19 +632,19 @@ function classCBAM() {
 function classSlotID() {
 
     //declare public members
-    this.clearArrayOfSlotIds = clearArrayOfSlotIds;
-    this.firstPossibleSlotIDforLB = firstPossibleSlotIDforLB;
-    this.lastPossibleSlotIDforLB = lastPossibleSlotIDforLB;
-    this.firstPossibleSlotIDforMG = firstPossibleSlotIDforMG;
-    this.lastPossibleSlotIDforMG = lastPossibleSlotIDforMG;
-    this.checkIfValidSlotIdforMG = checkIfValidSlotIdforMG;
-    this.checkIfValidSlotIdforLB = checkIfValidSlotIdforLB;
-    this.findNextFreeSlotIDforLB = findNextFreeSlotIDforLB;
-    this.findNextFreeSlotIDsforMG = findNextFreeSlotIDsforMG;
-    this.initializeArrayOfExistingSlotIDs = initializeArrayOfExistingSlotIDs;
-    this.assignToLB = assignToLB;
-    this.assignToMgWorking = assignToMgWorking;
-    this.assignToMgProtect = assignToMgProtect;
+    this.clearArrayOfSlotIds= clearArrayOfSlotIds;
+    this.firstPossibleSlotIDforLB= firstPossibleSlotIDforLB;
+    this.lastPossibleSlotIDforLB= lastPossibleSlotIDforLB;
+    this.firstPossibleSlotIDforMG= firstPossibleSlotIDforMG;
+    this.lastPossibleSlotIDforMG= lastPossibleSlotIDforMG;
+    this.checkIfValidSlotIdforMG= checkIfValidSlotIdforMG;
+    this.checkIfValidSlotIdforLB= checkIfValidSlotIdforLB;
+    this.findNextFreeSlotIDforLB= findNextFreeSlotIDforLB;
+    this.findNextFreeSlotIDsforMG= findNextFreeSlotIDsforMG;
+    this.initializeArrayOfExistingSlotIDs= initializeArrayOfExistingSlotIDs;
+    this.assignToLB     = assignToLB;
+    this.assignToMgWorking= assignToMgWorking;
+    this.assignToMgProtect= assignToMgProtect;
 
     //private variables
     var arrayOfSlotIds = new Array();
@@ -719,11 +666,25 @@ function classSlotID() {
     }
     function lastPossibleSlotIDforLB()
     {
-        return cCBAM.getMaximumAllowedVMs();
+        if (reserveLBSlots)
+        {
+            return  max_scale_level_lb;
+        }
+        else
+        {
+            return cCBAM.getMaximumAllowedVMs();
+        }
     }
     function firstPossibleSlotIDforMG()
     {
-        return 1;
+        if (reserveLBSlots)
+        {
+            return (max_scale_level_lb+1);
+        }
+        else
+        {
+            return 1;
+        }
     }
     function lastPossibleSlotIDforMG()
     {
@@ -740,7 +701,6 @@ function classSlotID() {
             throw new Error('Invalid MG slotID:' + slotID);
         }
     }
-
     function checkIfValidSlotIdforLB(slotID)
     {
 
@@ -753,7 +713,7 @@ function classSlotID() {
     }
 
     //
-    // Find next 1 free slotID for LB
+    // Find next 1 free slotIDs for LB
     //
     // Return:
     //      lbSlotID
@@ -764,14 +724,14 @@ function classSlotID() {
 
         for (var iter = 1; iter <= lastPossibleSlotIDforLB(); iter++)
         {
-            if (arrayOfSlotIds.indexOf(iter) == -1) //this slot is not used until now
+            if (arrayOfSlotIds.indexOf(iter) == -1) //this slot not used until now
             {
-                lbSlot = iter; //found it
-                arrayOfSlotIds.push(parseInt(lbSlot)); //add it to list of used slotIDs
-                iter = (lastPossibleSlotIDforLB()+1); //break loop
+                lbSlot = iter;//found it
+                arrayOfSlotIds.push(parseInt(lbSlot));//add it to list of used slotIDs
+                iter = (lastPossibleSlotIDforLB()+1);//break loop
             }
         }
-        //did we find 1 slot id
+        //did we find 1 slotids
         if ((lbSlot == 0))
         {
             //we havent found free slotID
@@ -809,7 +769,7 @@ function classSlotID() {
 
                 //if both are found break loop
                 if ((workingSlot != 0) && (protectSlot != 0)) {
-                   iter = (lastPossibleSlotIDforMG()+1); //break loop
+                   iter = (lastPossibleSlotIDforMG()+1);//break loop
                 }
             }
         }
@@ -847,16 +807,26 @@ function classSlotID() {
         for (var iter = 0; iter < tempLbIndexesArray.length; iter++)
         {
             tempLbIndex = tempLbIndexesArray[iter];
-            arrayOfSlotIds.push(parseInt($.resource_model.resources.loadBalancerAspectGroup.resources[tempLbIndex].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId));
+            if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+              arrayOfSlotIds.push(parseInt($.resource_model.resources.loadBalancerAspectGroup.resources[tempLbIndex].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId));
+            } else {
+              arrayOfSlotIds.push(parseInt($.resource_model.resources.loadBalancerAspectGroup.resources[tempLbIndex].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_slotId));
+            }
         }
         //find existing slot IDs assigned to MGs
         for (var iter = 0; iter < tempMgIndexesArray.length; iter++)
         {
             tempMgIndex = tempMgIndexesArray[iter];
-            arrayOfSlotIds.push(parseInt($.resource_model.resources.mgRedundantAspectGroup.resources[tempMgIndex].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId));
-            arrayOfSlotIds.push(parseInt($.resource_model.resources.mgRedundantAspectGroup.resources[tempMgIndex].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId));
-        }
+            if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+              arrayOfSlotIds.push(parseInt($.resource_model.resources.mgRedundantAspectGroup.resources[tempMgIndex].resources.mgWorking.resources.mgServerInstance.metadata.nokia_vnf_slotId));
+              arrayOfSlotIds.push(parseInt($.resource_model.resources.mgRedundantAspectGroup.resources[tempMgIndex].resources.mgProtect.resources.mgServerInstance.metadata.nokia_vnf_slotId));
+            }
+            else {
+              arrayOfSlotIds.push(parseInt($.resource_model.resources.mgRedundantAspectGroup.resources[tempMgIndex].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId));
+              arrayOfSlotIds.push(parseInt($.resource_model.resources.mgRedundantAspectGroup.resources[tempMgIndex].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_slotId));
+            }
 
+        }
     }
     function assignToLB(rgIndex, slotID)
     {
@@ -945,9 +915,9 @@ function classAnsibleCheckVMs() {
 function classECP() {
 
     //declare public members
-    this.assignToLB = assignToLB;
-    this.assignToMgWorking = assignToMgWorking;
-    this.assignToMgProtect = assignToMgProtect;
+    this.assignToLB         = assignToLB;
+    this.assignToMgWorking  = assignToMgWorking;
+    this.assignToMgProtect  = assignToMgProtect;
 
     //private functions
 
@@ -962,8 +932,14 @@ function classECP() {
 
         if ($.resource_model.resources != undefined) {
           if (rgIndex in $.resource_model.resources.loadBalancerAspectGroup.resources) {
-            $.stack_params.cbam.resources.loadBalancerAspectGroup[rgIndex].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.ecp1 = $.resource_model.resources.loadBalancerAspectGroup.resources[rgIndex].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_ecp1;
-            $.stack_params.cbam.resources.loadBalancerAspectGroup[rgIndex].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.ecp2 = $.resource_model.resources.loadBalancerAspectGroup.resources[rgIndex].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_ecp2;
+            if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+              $.stack_params.cbam.resources.loadBalancerAspectGroup[rgIndex].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.ecp1 = $.resource_model.resources.loadBalancerAspectGroup.resources[rgIndex].resources.loadBalancerServerInstance.metadata.nokia_vnf_ecp1;
+              $.stack_params.cbam.resources.loadBalancerAspectGroup[rgIndex].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.ecp2 = $.resource_model.resources.loadBalancerAspectGroup.resources[rgIndex].resources.loadBalancerServerInstance.metadata.nokia_vnf_ecp2;
+            }
+            else {
+              $.stack_params.cbam.resources.loadBalancerAspectGroup[rgIndex].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.ecp1 = $.resource_model.resources.loadBalancerAspectGroup.resources[rgIndex].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_ecp1;
+              $.stack_params.cbam.resources.loadBalancerAspectGroup[rgIndex].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.ecp2 = $.resource_model.resources.loadBalancerAspectGroup.resources[rgIndex].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.metadata.nokia_vnf_ecp2;
+            }
           }
           else {
             $.stack_params.cbam.resources.loadBalancerAspectGroup[rgIndex].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.ecp1 = "loadBalancerExt" + (mappedIndex + ecp1Index).toString() + "ECP";
@@ -986,8 +962,13 @@ function classECP() {
 
         if ($.resource_model.resources != undefined) {
           if (rgIndex in $.resource_model.resources.mgRedundantAspectGroup.resources) {
-            $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgWorking.mgInstanceGroup["0"].mgServerInstance.ecp1 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_ecp1;
-            $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgWorking.mgInstanceGroup["0"].mgServerInstance.ecp2 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_ecp2;
+            if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+              $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgWorking.mgInstanceGroup["0"].mgServerInstance.ecp1 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgWorking.resources.mgServerInstance.metadata.nokia_vnf_ecp1;
+              $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgWorking.mgInstanceGroup["0"].mgServerInstance.ecp2 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgWorking.resources.mgServerInstance.metadata.nokia_vnf_ecp2;
+            } else {
+              $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgWorking.mgInstanceGroup["0"].mgServerInstance.ecp1 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_ecp1;
+              $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgWorking.mgInstanceGroup["0"].mgServerInstance.ecp2 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_ecp2;
+            }
           }
           else {
             $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgWorking.mgInstanceGroup["0"].mgServerInstance.ecp1 = "mgWorkingExt" + (mappedIndex + ecp1Index).toString() + "ECP";
@@ -1010,8 +991,13 @@ function classECP() {
 
         if ($.resource_model.resources != undefined) {
           if (rgIndex in $.resource_model.resources.mgRedundantAspectGroup.resources) {
-            $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.ecp1 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_ecp1;
-            $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.ecp2 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_ecp2;
+            if (cCBAM.operationIsUpgrade() && cCBAM.instantiatedPackageIsOld()){
+              $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.ecp1 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgProtect.resources.mgServerInstance.metadata.nokia_vnf_ecp1;
+              $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.ecp2 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgProtect.resources.mgServerInstance.metadata.nokia_vnf_ecp2;
+            } else {
+              $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.ecp1 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_ecp1;
+              $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.ecp2 = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_ecp2;
+          }
           }
           else {
             $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.ecp1 = "mgProtectExt" + (mappedIndex + ecp1Index).toString() + "ECP";
@@ -1021,68 +1007,6 @@ function classECP() {
         else {
           $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.ecp1 = "mgProtectExt" + (mappedIndex + ecp1Index).toString() + "ECP";
           $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.ecp2 = "mgProtectExt" + (mappedIndex + ecp2Index).toString() + "ECP";
-        }
-    }
-
-};
-
-function classImage() {
-
-    //declare public members
-    this.assignToLB         = assignToLB;
-    this.assignToMgWorking  = assignToMgWorking;
-    this.assignToMgProtect  = assignToMgProtect;
-    this.assignToOAMActive  = assignToOAMActive;
-    this.assignToOAMStandby  = assignToOAMStandby;
-
-    //private functions
-
-    function assignToLB(rgIndex)
-    {
-        if (cCBAM.checkNested($.resource_model, 'resources', 'loadBalancerAspectGroup', 'resources', rgIndex, 'resources', 'loadBalancerInstanceGroup', 'resources', '0', 'resources', 'loadBalancerServerInstance')) {
-           $.stack_params.cbam.resources.loadBalancerAspectGroup[rgIndex].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.imageId = $.resource_model.resources.loadBalancerAspectGroup.resources[rgIndex].resources.loadBalancerInstanceGroup.resources["0"].resources.loadBalancerServerInstance.attributes.image.id;
-        }
-        else {
-           $.stack_params.cbam.resources.loadBalancerAspectGroup[rgIndex].loadBalancerInstanceGroup["0"].loadBalancerServerInstance.imageId = $.stack_params.cbam.vdus.loadBalancerServer.imageId;
-        }
-    }
-    function assignToMgWorking(rgIndex)
-    {
-        if (cCBAM.checkNested($.resource_model, 'resources', 'mgRedundantAspectGroup', 'resources', rgIndex, 'resources', 'mgWorking', 'resources', 'mgInstanceGroup', 'resources', '0', 'resources', 'mgServerInstance')) {
-           $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgWorking.mgInstanceGroup["0"].mgServerInstance.imageId = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.attributes.image.id;
-        }
-        else {
-          $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgWorking.mgInstanceGroup["0"].mgServerInstance.imageId = $.stack_params.cbam.vdus.mgServer.imageId;
-        }
-    }
-
-    function assignToMgProtect(rgIndex)
-    {
-        if (cCBAM.checkNested($.resource_model, 'resources', 'mgRedundantAspectGroup', 'resources', rgIndex, 'resources', 'mgProtect', 'resources', 'mgInstanceGroup', 'resources', '0', 'resources', 'mgServerInstance')) {
-           $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.imageId = $.resource_model.resources.mgRedundantAspectGroup.resources[rgIndex].resources.mgProtect.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.attributes.image.id;
-        }
-        else {
-          $.stack_params.cbam.resources.mgRedundantAspectGroup[rgIndex].mgProtect.mgInstanceGroup["0"].mgServerInstance.imageId = $.stack_params.cbam.vdus.mgServer.imageId;
-        }
-    }
-
-    function assignToOAMActive()
-    {
-        if (cCBAM.checkNested($.resource_model, 'resources', 'oamAspectGroup', 'resources', '0', 'resources', 'OAMActive', 'resources', 'oamInstanceGroup', 'resources', '0', 'resources', 'oamServerInstance')) {
-           $.stack_params.cbam.resources.oamAspectGroup["0"].OAMActive.oamInstanceGroup["0"].oamServerInstance.imageId = $.resource_model.resources.oamAspectGroup.resources["0"].resources.OAMActive.resources.oamInstanceGroup.resources["0"].resources.oamServerInstance.attributes.image.id;
-        }
-        else {
-          $.stack_params.cbam.resources.oamAspectGroup["0"].OAMActive.oamInstanceGroup["0"].oamServerInstance.imageId = $.stack_params.cbam.vdus.oamServer.imageId;
-        }
-    }
-
-    function assignToOAMStandby()
-    {
-        if (cCBAM.checkNested($.resource_model, 'resources', 'oamAspectGroup', 'resources', '0', 'resources', 'OAMStandby', 'resources', 'oamInstanceGroup', 'resources', '0', 'resources', 'oamServerInstance')) {
-           $.stack_params.cbam.resources.oamAspectGroup["0"].OAMStandby.oamInstanceGroup["0"].oamServerInstance.imageId = $.resource_model.resources.oamAspectGroup.resources["0"].resources.OAMStandby.resources.oamInstanceGroup.resources["0"].resources.oamServerInstance.attributes.image.id;
-        }
-        else {
-           $.stack_params.cbam.resources.oamAspectGroup["0"].OAMStandby.oamInstanceGroup["0"].oamServerInstance.imageId = $.stack_params.cbam.vdus.oamServer.imageId;
         }
     }
 

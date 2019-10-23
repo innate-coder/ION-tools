@@ -114,7 +114,7 @@
     - name: Check for configuration execution failures
       fail: msg="Execution of configuration action was not completed successfully"
       register: config_suspend_check
-      failed_when: configure_max_suspend.stdout[0].find('MINOR') != -1 or configure_max_suspend.stdout[0].find('MAJOR') != -1 or configure_max_suspend.stdout[0].find('ERROR') != -1 or configure_max_suspend.stdout[0].find('INFO') != -1 or configure_max_suspend.stdout[0].find('WARNING') != -1 or configure_max_suspend.stdout[0].find('CRITICAL') != -1
+      failed_when: configure_max_suspend.stdout[0].find('MINOR') > 0 or configure_max_suspend.stdout[0].find('MAJOR') > 0 or configure_max_suspend.stdout[0].find('ERROR') > 0 or configure_max_suspend.stdout[0].find('INFO') > 0 or configure_max_suspend.stdout[0].find('WARNING') > 0 or configure_max_suspend.stdout[0].find('CRITICAL') > 0
       when: '("mgScaleInOperation" in resources) and gracefulScaleIn'
 
     - name: Configure session deletion rate for PDN

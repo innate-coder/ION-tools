@@ -1,7 +1,2 @@
-2019-07-19
-- DTS326699: Remove l3fab parameters when L2 fab is enabled
-- Added new conditions in heat templates
-- Modified heat template version
-- Removed nokia_vnf_smbios and nokia_vnf_csfIp server-level metadata
-- Moved OAM CSF ports to cmg.hot.yaml
-- Enabled CSF dynamic fixed IP assignment through heat
+2019-03-29
+- Fixed: CBAM sends OAM ECP address to NSP and failed to discover the CMG (DTS316373)

@@ -13,13 +13,24 @@ for(var iter =  0 ; iter < mgRgIndexes.length; iter++ )
         {
             if (!operationIsUpgrade()) {
 
-                $.stack_params.cbam.resources.mgRedundantAspectGroup[mgRgIndexes[iter]].cpCores = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_cpCores ;
-                $.stack_params.cbam.resources.mgRedundantAspectGroup[mgRgIndexes[iter]].cfp = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_cfp ;
+                if($.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_cpCores == undefined )
+                {
+                    $.stack_params.cbam.resources.mgRedundantAspectGroup[mgRgIndexes[iter]].cpCores = $.stack_params.cbam.extensions.controlPlaneCores ;
+                } else {
+                    $.stack_params.cbam.resources.mgRedundantAspectGroup[mgRgIndexes[iter]].cpCores = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_cpCores ;
+                }
+                if($.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_cfp == undefined )
+                {
+                    $.stack_params.cbam.resources.mgRedundantAspectGroup[mgRgIndexes[iter]].cfp = $.stack_params.cbam.extensions.compactFp ;
+                } else {
+                    $.stack_params.cbam.resources.mgRedundantAspectGroup[mgRgIndexes[iter]].cfp = $.resource_model.resources.mgRedundantAspectGroup.resources[mgRgIndexes[iter]].resources.mgWorking.resources.mgInstanceGroup.resources["0"].resources.mgServerInstance.metadata.nokia_vnf_cfp ;
+                }
 
             }
             else {
 
                 $.stack_params.cbam.resources.mgRedundantAspectGroup[mgRgIndexes[iter]].cpCores = $.stack_params.cbam.extensions.controlPlaneCores ;
+
                 $.stack_params.cbam.resources.mgRedundantAspectGroup[mgRgIndexes[iter]].cfp = $.stack_params.cbam.extensions.compactFp ;
             }
         }
@@ -51,7 +62,6 @@ for(var iter =  0 ; iter < mgRgIndexes.length; iter++ )
         }
     }
 }
-
 return $.stack_params
 
 function isNumeric(n) {
@@ -71,7 +81,7 @@ function getMgRgIndexes() {
 
 function operationIsInstantiation() {
 
-    if ($.operation_params.flavourId != undefined) {
+    if ($.operation_params.instantiationLevelId != undefined) {
         if ($.resource_model.resources == undefined) {
             return true;
         }
@@ -102,10 +112,10 @@ function operationIsHealing() {
     return false;
 }
 
-function operationIsAASignatureUpdate() {
+function operationIsReInstantiate() {
 
     if ($.operation_params.additionalParams != undefined) {
-        if ($.operation_params.additionalParams.vmReInstantiation != undefined) {
+        if ($.operation_params.additionalParams.vnfcToReInstantiate != undefined) {
             return true;
         }
     }
@@ -115,7 +125,7 @@ function operationIsAASignatureUpdate() {
 
 function operationIsUpgrade() {
 
-    if (!operationIsInstantiation() && !operationIsScaling() && !operationIsHealing() && !operationIsAASignatureUpdate()) {
+    if (!operationIsInstantiation() && !operationIsScaling() && !operationIsHealing() && !operationIsReInstantiate()) {
         return true;
     }
     return false;

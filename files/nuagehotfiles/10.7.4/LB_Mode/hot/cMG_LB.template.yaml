@@ -1,0 +1,167 @@
+heat_template_version: 2015-04-30
+
+description:
+  Isolates LB as a complete resource together with associated ports
+
+parameters:
+  prefix:
+    type: string
+    description: String to make the name of all created resources unique
+  cbam:
+    type: json
+  resources:
+    type: json
+    description: The data for this group
+  rg_index:
+    type: string
+    description: Current index of the resource group ( ex. 0, 2)
+    default: invalid
+  loadBalancerMangementNet:
+    type: string
+    description: Management network for LoadBalancer
+  loadBalancerFabricNet:
+    type: string
+    description: Control Switch Fabric network for LoadBalancer
+  loadBalancerAllowedAddressPairList:
+    type: comma_delimited_list
+    description: Allowed IP address pair list for LoadBalancer External networks
+  loadBalancerAntiAffinityGrp:
+    type: string
+    description: Anti Affinity group for LoadBalancer
+  mtuSize:
+    type: string
+    description: MTU Size for Switch Fabric
+
+resources:
+ loadBalancerManagementPort:
+    type: OS::Neutron::Port
+    properties:
+      name: { list_join: [ "-", [ { get_param: prefix }, LBMgmtPort, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] } ] ] }
+      network: { get_param: loadBalancerMangementNet }
+      security_groups: [ { get_param: [ cbam, extensions, securityGroup ] } ]
+      replacement_policy: AUTO
+
+ loadBalancerControlSwitchFabricPort:
+    type: OS::Neutron::Port
+    properties:
+      name: { list_join: [ "-", [ { get_param: prefix }, LBCSFPort, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] } ] ] }
+      network: { get_param: loadBalancerFabricNet }
+      security_groups: [ { get_param: [ cbam, extensions, securityGroup ] } ]
+      replacement_policy: AUTO
+      fixed_ips: [{
+         "ip_address": { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, controlSwitchFabricIp ] }
+         }]
+      value_specs:
+        # extra_dhcp_opts names are vendor specific. For Nuage opt_name=”mtu” should be used instead of “interface-mtu”
+        extra_dhcp_opts:
+        - {opt_name: mtu, opt_value: { get_param: mtuSize }}
+
+ loadBalancerDataSwitchFabric1Port:
+    type: OS::Neutron::Port
+    properties:
+      name: { list_join: [ "-", [ { get_param: prefix }, LBDataSF1Port, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] } ] ] }
+      network: { get_param: [ cbam, virtualLinks, dataSwitchFabric1VL, networkId ] }
+      security_groups: [ { get_param: [ cbam, extensions, securityGroup ] } ]
+      binding:vnic_type: "direct"
+      replacement_policy: AUTO
+      #value_specs:
+        # extra_dhcp_opts names are vendor specific. For Nuage opt_name=”mtu” should be used instead of “interface-mtu”
+        #extra_dhcp_opts:
+        #- {opt_name: mtu, opt_value: { get_param: mtuSize }}
+      fixed_ips:
+        - subnet_id: { get_param: [ cbam, extensions, dataSwitchFabric1SubnetId ] }
+
+ loadBalancerDataSwitchFabric2Port:
+    type: OS::Neutron::Port
+    properties:
+      name: { list_join: [ "-", [ { get_param: prefix }, LBDataSF2Port, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] } ] ] }
+      network: { get_param: [ cbam, virtualLinks, dataSwitchFabric2VL, networkId ] }
+      security_groups: [ { get_param: [ cbam, extensions, securityGroup ] } ]
+      binding:vnic_type: "direct"
+      replacement_policy: AUTO
+      # extra_dhcp_opts names are vendor specific. For Nuage opt_name=”mtu” should be used instead of “interface-mtu”
+      #value_specs:
+        #extra_dhcp_opts:
+        #- {opt_name: mtu, opt_value: { get_param: mtuSize }}
+      fixed_ips:
+        - subnet_id: { get_param: [ cbam, extensions, dataSwitchFabric2SubnetId ] }
+
+ loadBalancerExt1Port:
+    type: OS::Neutron::Port
+    properties:
+      name: { list_join: [ "-", [ { get_param: prefix }, LBExt1Port, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp1 ] }, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] } ] ] }
+      network: { get_param: [ cbam, externalConnectionPoints, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp1 ] }, networkId ] }
+      security_groups: [ { get_param: [ cbam, extensions, securityGroup ] } ]
+      binding:vnic_type: "direct"
+      replacement_policy: AUTO
+      fixed_ips: [{
+         "ip_address": { get_param: [ cbam, externalConnectionPoints, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp1 ] }, addresses, 0 , ip ] }
+         }]
+      allowed_address_pairs:
+         repeat:
+          for_each:
+            <%ipAddr%>: { get_param: loadBalancerAllowedAddressPairList }
+          template:
+            ip_address: <%ipAddr%>
+
+ loadBalancerExt2Port:
+    type: OS::Neutron::Port
+    properties:
+      name: { list_join: [ "-", [ { get_param: prefix }, LBExt2Port,{ get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp2 ] },  { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] } ] ] }
+      network: { get_param: [ cbam, externalConnectionPoints, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp2 ] }, networkId ] }
+      security_groups: [ { get_param: [ cbam, extensions, securityGroup ] } ]
+      binding:vnic_type: "direct"
+      replacement_policy: AUTO
+      fixed_ips: [{
+         "ip_address": { get_param: [ cbam, externalConnectionPoints, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp2 ] }, addresses, 0 , ip ] }
+         }]
+      allowed_address_pairs:
+         repeat:
+          for_each:
+            <%ipAddr%>: { get_param: loadBalancerAllowedAddressPairList }
+          template:
+            ip_address: <%ipAddr%>
+
+ loadBalancerTrunkPort1:
+    type: OS::Neutron::Trunk
+    depends_on: [loadBalancerExt1Port]
+    properties:
+      name: { list_join: [ "-", [ { get_param: prefix }, LBTrunk1Port, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp1 ] }, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] } ] ] }
+      port: { get_resource: loadBalancerExt1Port }
+ 
+ loadBalancerTrunkPort2:
+    type: OS::Neutron::Trunk
+    depends_on: [loadBalancerExt2Port]
+    properties:
+      name: { list_join: [ "-", [ { get_param: prefix }, LBTrunk2Port, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp2 ] }, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] } ] ] }
+      port: { get_resource: loadBalancerExt2Port }
+ loadBalancerServerInstance:
+    type: OS::Nova::Server
+    depends_on: [ loadBalancerManagementPort, loadBalancerControlSwitchFabricPort, loadBalancerDataSwitchFabric1Port, loadBalancerDataSwitchFabric2Port, loadBalancerExt1Port, loadBalancerExt2Port  ]
+    metadata: { "nokia_vnf_slotId": { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] }, "nokia_vnf_ecp1": { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp1 ] }, "nokia_vnf_ecp2": { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, ecp2 ] }, "nokia_vnf_cardType": "LB", "nokia_vnf_groupIndex" : { get_param: [ resources, { get_param: rg_index }, _mappedIndex ] }, "nokia_vnf_smbios": { list_join: [ "", [ { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, smbios, main ] }, { get_attr: [loadBalancerDataSwitchFabric1Port, fixed_ips, 0, ip_address] }, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, smbios, dsf1 ] }, { get_attr: [loadBalancerDataSwitchFabric2Port, fixed_ips, 0, ip_address] }, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, smbios, dsf2 ] } ] ] }, "nokia_vnf_csfIp": { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, controlSwitchFabricIp ] } }
+    properties:
+      image_update_policy: "REPLACE"
+      name: { list_join: [ "-", [ { get_param: prefix }, LB, { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, slot ] } ] ] }
+      image: { get_param: [ cbam, vdus, loadBalancerServer, imageId ] }
+      flavor: { get_param: [ cbam, vdus, loadBalancerServer, flavorId ] }
+      config_drive: "true"
+      user_data:
+        str_replace:
+          template: "$lbSmbiosMain$dataSwitchFabric1Ip$lbSmbiosDSF1$dataSwitchFabric2Ip$lbSmbiosDSF2"
+          params:
+            $lbSmbiosMain: { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, smbios, main ] }
+            $dataSwitchFabric1Ip: { get_attr: [loadBalancerDataSwitchFabric1Port, fixed_ips, 0, ip_address] }
+            $lbSmbiosDSF1: { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, smbios, dsf1 ] }
+            $dataSwitchFabric2Ip: { get_attr: [loadBalancerDataSwitchFabric2Port, fixed_ips, 0, ip_address] }
+            $lbSmbiosDSF2: { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, smbios, dsf2 ] }
+      user_data_format: "RAW"
+      networks:
+        - port: { get_resource: loadBalancerManagementPort }
+        - port: { get_resource: loadBalancerControlSwitchFabricPort }
+        - port: { get_resource: loadBalancerDataSwitchFabric1Port }
+        - port: { get_resource: loadBalancerDataSwitchFabric2Port }
+        - port: { get_resource: loadBalancerExt1Port }
+        - port: { get_resource: loadBalancerExt2Port }
+      availability_zone: { get_param: [ resources, { get_param: rg_index }, loadBalancerInstanceGroup, "0", loadBalancerServerInstance, azId ] }
+      scheduler_hints:
+        group: { get_param: loadBalancerAntiAffinityGrp }

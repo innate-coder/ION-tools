@@ -1,0 +1,58 @@
+heat_template_version: 2015-04-30
+
+description:
+  Isolates MG working and protect groups
+
+parameters:
+  cbam:
+    type: json
+  rg_index:
+    type: string
+    description: Current index of the resource group ( ex. 0, 2)
+    default: invalid
+  mgManagementNet:
+    type: string
+    description: Management network for MG
+  mgControlFabricNet:
+    type: string
+    description: Control Switch Fabric network for MG VM
+
+resources:
+ mgAntiAffinityGroup:
+    type:  OS::Nova::ServerGroup
+    properties:
+      name: { list_join: [ "-", [ { get_param: [ cbam, vnfId ] }, mgAntiAffinityGroup, { get_param: [ cbam, resources, mgRedundantAspectGroup, { get_param: rg_index }, mgWorking, mgInstanceGroup, "0", mgServerInstance, slot ] } ] ] }
+      policies:
+        - anti-affinity
+
+ mgWorking:
+    type: cMG_MGInstanceGroup.template.yaml
+    depends_on: [ mgAntiAffinityGroup ]
+    properties:
+      cbam: { get_param: cbam }
+      resources: { get_param: [ cbam, resources, mgRedundantAspectGroup, { get_param: rg_index }, mgWorking ] }
+      mgType: mgWorking
+      prefix: { get_param: [ cbam, extensions, vnfHostname ] }
+      mgManagementNet: { get_param: mgManagementNet }
+      mgControlFabricNet: { get_param: mgControlFabricNet }
+      mgAntiAffinityGroup: { get_resource: mgAntiAffinityGroup }
+      cpCores: { get_param: [ cbam, resources, mgRedundantAspectGroup, { get_param: rg_index }, cpCores ] }
+      cfpValue: { get_param: [ cbam, resources, mgRedundantAspectGroup, { get_param: rg_index }, cfp ] }
+      groupIndex: { get_param: [ cbam, resources, mgRedundantAspectGroup, { get_param: rg_index }, _mappedIndex ] }
+      mtuSize: { get_param: [ cbam, extensions, mtu ] }
+
+ mgProtect:
+    type: cMG_MGInstanceGroup.template.yaml
+    depends_on: [ mgAntiAffinityGroup ]
+    properties:
+      cbam: { get_param: cbam }
+      resources: { get_param: [ cbam, resources, mgRedundantAspectGroup, { get_param: rg_index }, mgProtect ] }
+      mgType: mgProtect
+      prefix: { get_param: [ cbam, extensions, vnfHostname ] }
+      mgManagementNet: { get_param: mgManagementNet }
+      mgControlFabricNet: { get_param: mgControlFabricNet }
+      mgAntiAffinityGroup: { get_resource: mgAntiAffinityGroup }
+      cpCores: { get_param: [ cbam, resources, mgRedundantAspectGroup, { get_param: rg_index }, cpCores ] }
+      cfpValue: { get_param: [ cbam, resources, mgRedundantAspectGroup, { get_param: rg_index }, cfp ] }
+      groupIndex: { get_param: [ cbam, resources, mgRedundantAspectGroup, { get_param: rg_index }, _mappedIndex ] }
+      mtuSize: { get_param: [ cbam, extensions, mtu ] }

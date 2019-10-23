@@ -2,6 +2,8 @@ package utils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -12,7 +14,6 @@ import org.apache.commons.io.FileUtils;
 import constants.ModelClassConstants;
 import models.CMgCbamGrantless;
 import models.CMgCbamInstantiate;
-import models.CMgCbamModifyVnfd;
 import models.MainModelClass;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -62,15 +63,6 @@ public class CommonUtils {
 		}
 	}
 	
-  public static void copyFile(String sourceFile, File destFile){
-	    	File source = new File(sourceFile);
-	    	try {
-	    	    FileUtils.copyFile(source, destFile);	    	    
-	 	   } catch (IOException e) {
-	 	    e.printStackTrace();
-	      }
-  }
-  
   public static boolean isValidInet4Address(String ip) {
 		if (ip == null) {
 			return false;
@@ -119,6 +111,78 @@ public class CommonUtils {
 	  }
 	  System.out.println("Last digit of IP is: "+lastDigit);
 	  return (value+(lastDigit));
+  }
+  
+  public static void cleanDirectory(File directory){
+	try {
+		FileUtils.cleanDirectory(directory);
+	} catch (IOException e) {
+		e.printStackTrace();
+	} 
+  }
+  
+  public static void skipLines(Scanner s, int lineNum) {
+      for (int i = 0; i < lineNum; i++) {
+          if (s.hasNextLine()) s.nextLine();
+      }
+  }
+  
+ public static void copyFile(String sourceFile, File destFile){
+     File source = new File(sourceFile);
+     try {
+    	FileUtils.copyFile(source, destFile);	    	    
+ 	 } catch (IOException e) {
+ 	    e.printStackTrace();
+     }
+ }  
+
+ public static void copyFile(String sourceFile, String destinationFilePath){
+ 	File source = new File(sourceFile);	    	
+ 	File destinationFile = new File(destinationFilePath);
+ 	System.out.println("Source File: "+source.getPath());
+ 	System.out.println("Destination File: "+destinationFile.getPath());
+ 	try {
+ 	    FileUtils.copyDirectory(source, destinationFile);
+ 	} catch (IOException e) {
+ 	    e.printStackTrace();
+ 	}
+ }
+ 
+ public static void copyFileInDirectory(String sourceFile, String destinationFilePath){
+	 	File source = new File(sourceFile);	    	
+	 	File destinationFile = new File(destinationFilePath);
+	 	System.out.println("Source File: "+source.getPath());
+	 	System.out.println("Destination File: "+destinationFile.getPath());
+	 	try {
+	 	    FileUtils.copyDirectory(source, destinationFile);
+	 	} catch (IOException e) {
+	 	    e.printStackTrace();
+	 	}
+ }
+ 
+ public static void copyFileWithNewName(String sourceFile, String destinationFilePath){
+  	File source = new File(sourceFile);	    	
+  	File destinationFile = new File(destinationFilePath);
+  	System.out.println("Source File: "+source.getPath());
+  	System.out.println("Destination File: "+destinationFile.getPath());
+  	try {
+  	    FileUtils.copyFile(source, destinationFile);
+  	} catch (IOException e) {
+  	    e.printStackTrace();
+  	}
+ }
+  
+ public static String showPopUpForMultipleOptions(ArrayList<String> options, String message){
+	  String[] items = options.toArray(new String[options.size()]); 
+	  String s = (String) JOptionPane.showInputDialog(
+	          null,
+	          "Please select "+message,
+	          "Select One",
+	          JOptionPane.PLAIN_MESSAGE,
+	          null,
+	          items,
+	          options.get(0));
+	  return s;
   }
 }
 

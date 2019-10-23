@@ -1,0 +1,67 @@
+heat_template_version: 2015-04-30
+
+description:
+  Isolates OAM active and standby groups
+
+parameters:
+  cbam:
+    type: json
+  oamAntiAffinityGrp:
+    type: string
+    description: OAM Anti Affinity Group
+  oamControlFabricNet:
+    type: string
+    description: Control Switch Fabric Network for OAM
+  oamADisk1:
+    type: string
+    description: OAM Active CompactFlash 1
+  oamADisk2:
+    type: string
+    description: OAM Active CompactFlash 2
+  oamBDisk1:
+    type: string
+    description: OAM Standby CompactFlash 1
+  oamBDisk2:
+    type: string
+    description: OAM Standby CompactFlash 2
+  oamGroup:
+    type: string
+    default: "0"
+
+resources:
+
+ OAMActive:
+    type: cMG_OAMInstanceGroup.template.yaml
+    properties:
+      cbam: { get_param: cbam }
+      prefix: { get_param: [ cbam, extensions, vnfHostname ] }
+      oamControlFabricNet: { get_param: oamControlFabricNet }
+      oamMgmtIp: { get_param: [ cbam, externalConnectionPoints, oamManagementECP, addresses, 0 , ip ] }
+      oamMetadataIp: { get_param: [ cbam, resources, oamActiveManagementIp ] }
+      oamAllowedAddressPairs: { get_param: [ cbam, resources, oamAllowedAddressPairsA ] }
+      oamSlotId: A
+      oamSystemIp: { get_param: [ cbam, extensions, systemIpAddr ] }
+      oamAntiAffinityGrp: { get_param: oamAntiAffinityGrp }
+      resources: { get_param: [ cbam, resources, oamAspectGroup, { get_param: oamGroup }, OAMActive ] }
+      oamControlSwitchFabricIp: { get_param: [ cbam, resources, oamAspectGroup, { get_param: oamGroup }, OAMActive, oamInstanceGroup, { get_param: oamGroup }, oamServerInstance, controlSwitchFabricIp ] }
+      oamDisk1: { get_param: oamADisk1 }
+      oamDisk2: { get_param: oamADisk2 }
+      mtuSize: { get_param: [ cbam, extensions, mtu ] }
+
+ OAMStandby:
+    type: cMG_OAMInstanceGroup.template.yaml
+    properties:
+      cbam: { get_param: cbam }
+      prefix: { get_param: [ cbam, extensions, vnfHostname ] }
+      oamControlFabricNet: { get_param: oamControlFabricNet }
+      oamMgmtIp: { get_param: [ cbam, externalConnectionPoints, oamManagementECP, addresses, 1 , ip ] }
+      oamMetadataIp: { get_param: [ cbam, resources, oamStandbyManagementIp ] }
+      oamAllowedAddressPairs: { get_param: [ cbam, resources, oamAllowedAddressPairsB ] }
+      oamSlotId: B
+      oamSystemIp: { get_param: [ cbam, extensions, systemIpAddr ] }
+      oamAntiAffinityGrp: { get_param: oamAntiAffinityGrp }
+      resources: { get_param: [ cbam, resources, oamAspectGroup, { get_param: oamGroup }, OAMStandby ] }
+      oamControlSwitchFabricIp: { get_param: [ cbam, resources, oamAspectGroup, { get_param: oamGroup }, OAMStandby, oamInstanceGroup, { get_param: oamGroup }, oamServerInstance, controlSwitchFabricIp ] }
+      oamDisk1: { get_param: oamBDisk1 }
+      oamDisk2: { get_param: oamBDisk2 }
+      mtuSize: { get_param: [ cbam, extensions, mtu ] }

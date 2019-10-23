@@ -1,12 +1,12 @@
 tosca_definitions_version: tosca_simple_profile_for_nfv_1_0_0_nokia_3_4_0
 
 metadata:
-  vnfd_id: Nokia~Cloud_MG~11.0R2~11.1.2~sriov
-  vnfd_version: '11.1.2.sriov'
+  vnfd_id: Nokia~Cloud_MG~10.0R11~10.7.4~sriovmgRedirect
+  vnfd_version: '10.7.4.sriovmgRedirect'
   vnf_product_name: Cloud MG
   vnf_product_info_name: Cloud Mobile Gateway
   vnf_provider: Nokia
-  vnf_software_version: '11.0R2'
+  vnf_software_version: '10.0R11'
   vnfm_info: CBAM
 
 description: Cloud Mobile Gateway
@@ -15,11 +15,11 @@ topology_template:
   substitution_mappings:
     node_type: tosca.nodes.nfv.VNF
     properties:
-      descriptor_id: Nokia~Cloud_MG~11.0R2~11.1.2~sriov
-      descriptor_version: '11.1.2.sriov'
+      descriptor_id: Nokia~Cloud_MG~10.0R11~10.7.4~sriovmgRedirect
+      descriptor_version: '10.7.4.sriovmgRedirect'
       provider: Nokia
       product_name: Cloud MG
-      software_version: '11.0R2'
+      software_version: '10.0R11'
       product_info_name: Cloud Mobile Gateway
       product_info_description: Cloud Mobile Gateway
       vnfm_info:
@@ -42,6 +42,42 @@ topology_template:
       - virtual_link: [ loadBalancerExt14ECP, external_virtual_link ]
       - virtual_link: [ loadBalancerExt15ECP, external_virtual_link ]
       - virtual_link: [ loadBalancerExt16ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt1ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt1ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt2ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt2ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt3ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt3ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt4ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt4ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt5ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt5ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt6ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt6ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt7ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt7ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt8ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt8ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt9ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt9ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt10ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt10ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt11ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt11ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt12ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt12ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt13ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt13ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt14ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt14ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt15ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt15ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt16ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt16ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt17ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt17ECP, external_virtual_link ]
+      - virtual_link: [ mgWorkingExt18ECP, external_virtual_link ]
+      - virtual_link: [ mgProtectExt18ECP, external_virtual_link ]
 
     capabilities:
       deployment_flavour:
@@ -91,33 +127,32 @@ topology_template:
           modifiable_attributes:
             extensions:
               systemIpAddr:
-                default: "10.20.1.1"
+                default: "10.23.34.29"
               staticRoute:
-                default: "static-route=15.227.50.140/32@15.227.17.33 static-route=0.0.0.0/0@15.227.17.33"
+                default: "staticRoute:29.09.28.34"
               primaryConfigFile:
-                default: "ftp://*:*@15.227.50.140/./images/dut-a.cfg"
+                default: "cf3:\license.txt"
               licenseFile:
-                default: "ftp://*:*@15.227.50.140/./images/timos.vsr-all.txt"
+                default: "cf3:\config.cfg"
               securityGroup:
-                default: "srGrp"
               oamManagementNetmask:
-                default: "27"
+                default: "29"
               dataSwitchFabric1Vlan:
-                default: "100"
+                default: "0"
               dataSwitchFabric2Vlan:
-                default: "200"
+                default: "0"
               oamCompactFlash1Size:
-                default: "64"
+                default: "256"
               oamCompactFlash2Size:
-                default: "64"
+                default: "256"
               externalIpAddressList:
-                default: "0.0.0.0/0,1.1.1.1/1"
+                default: "0.0.0.0/0,1.1.1.1"
               csfFailureDetectionTimer:
                 default: "100"
               hyperThreadingSupportValue:
-                default: "0"
+                default: "1"
               controlPlaneCores:
-                default: "4"
+                default: "6"
               compactFp:
                 default: "0"
               multipleNicTasks:
@@ -125,7 +160,7 @@ topology_template:
               snmpCommunity:
                 default: "private"
               vnfHostname:
-                default: "CloudMG"
+                default: "NONCUPSHOST"
               mtu:
                 default: "9000"
               l3Connectivity:
@@ -135,29 +170,35 @@ topology_template:
               controlSwitchFabricGatewayIp:
                 default: "1.0.1.1"
               dataSwitchFabric1Cidr:
-                default: "1.0.3.0/24"
+                default: "2.0.2.0/24"
               dataSwitchFabric2Cidr:
-                default: "1.0.4.0/24"
-              cupsMode:
-                default: false
+                default: "2.0.3.0/24"
               scaleConfig:
-                default: true
+                default: false
               oamUsername:
                 default: "admin"
               oamPassword:
                 default: "admin"
               oamActiveVirtualIp:
-                default: "15.227.17.40"
+                default: "10.95.20.20"
               oamStandbyVirtualIp:
-                default: "15.227.17.41"
+                default: "10.95.20.21"
               dataSwitchFabric1SubnetId:
-                default: "dataSwitchFabric1Subnet"
+                default: "CMG1DFab1SubnetUPF"
               dataSwitchFabric2SubnetId:
-                default: "dataSwitchFabric2Subnet"
+                default: "CMG1DFab2SubnetUPF"
               mgLbManagementCidr:
-                default: "1.0.2.0/24"
+                default: "1.0.4.0/24"
               mgLbManagementGatewayIp:
-                default: "1.0.2.1"
+                default: "1.0.4.1"
+              oamACompactFlash1Id:
+               default: "9938dca5-1e71-4dc7-8cfb-c4c6c1ab0d48"
+              oamACompactFlash2Id:
+               default: "e95e30f1-6332-4972-942f-4135aea9d6e8"
+              oamBCompactFlash1Id:
+               default: "74950040-1478-4c99-a27a-bbe0b7202579"
+              oamBCompactFlash2Id:
+               default: "fa4acf75-cb97-410f-8169-2d955d0b0dfe"
               vf2vf:
                 default: "0"
               suspendTimer:
@@ -216,9 +257,9 @@ topology_template:
               input_actions:
               - javascript: javascript/vnfcToRemove.js
                 output: auxiliary_parameters
-              post_actions:
-              - ansible: ansible/checkVmsUp.yaml
-              - ansible: ansible/configureScaling.yaml
+              #post_actions:
+              #- ansible: ansible/checkVmsUp.yaml
+              #- ansible: ansible/configureScaling.yaml
 
       Healable:
         heal:
@@ -230,11 +271,11 @@ topology_template:
       Custom:
         upgrade:
           implementation: mistral-workbooks/cMGupgrade_workbook.yaml
-        aa-signature-update:
-          implementation: mistral-workbooks/cMGaaSignatureUpdate_workbook.yaml
+        re-instantiate:
+          implementation: mistral-workbooks/cMGreinstantiate_workbook.yaml
           inputs:
             additional_parameters:
-              vmReInstantiation: true
+              vnfcToReInstantiate:
 
   node_templates:
     oamServer:
@@ -262,7 +303,7 @@ topology_template:
     mgServer:
       type: tosca.nodes.nfv.VDU
       properties:
-        description: MG Server VDU
+        description: MG Working Server VDU
         configurable_properties:
           additional_vnfc_configurable_properties: {}
       requirements:
@@ -273,55 +314,55 @@ topology_template:
       type: tosca.nodes.nfv.VirtualCompute
       properties:
         virtual_memory:
-            virtual_mem_size: 16000 MB
+            virtual_mem_size: 24576 MB
         virtual_cpu:
             cpu_architecture: x86
-            num_virtual_cpu: 8
+            num_virtual_cpu: 16
             virtual_cpu_clock: 2500 MHz
 
     loadBalancerCompute:
       type: tosca.nodes.nfv.VirtualCompute
       properties:
         virtual_memory:
-            virtual_mem_size: 16000 MB
+            virtual_mem_size: 32768 MB
         virtual_cpu:
             cpu_architecture: x86
-            num_virtual_cpu: 8
+            num_virtual_cpu: 16
             virtual_cpu_clock: 2500 MHz
 
     mgCompute:
       type: tosca.nodes.nfv.VirtualCompute
       properties:
         virtual_memory:
-            virtual_mem_size: 32000 MB
+            virtual_mem_size: 131072 MB
         virtual_cpu:
             cpu_architecture: x86
-            num_virtual_cpu: 11
+            num_virtual_cpu: 30
             virtual_cpu_clock: 2500 MHz
 
     compactFlash1:
       type: tosca.nodes.nfv.VirtualStorage
       properties:
         type_of_storage: volume
-        size_of_storage: 64 GB
+        size_of_storage: 256 GB
       requirements:
 
     compactFlash2:
       type: tosca.nodes.nfv.VirtualStorage
       properties:
         type_of_storage: volume
-        size_of_storage: 64 GB
+        size_of_storage: 256 GB
       requirements:
 
     cmgImage:
       type: tosca.nodes.nfv.SwImage
       properties:
         name: CMG Image
-        version: 11.0r2
+        version: 10.0R11
         sw_image: cmgVmImage
-        checksum: 08d04be3a6deaf6ab79bc5cc88ac1a66
-        container_format: bare
-        disk_format: qcow2
+        checksum: 493442ae5689d1932cdcc7ab074a713f
+        container_format: qcow2
+        disk_format: bare
         min_disk: 2 GB
         min_ram: 8096 MB
         size: 2 GB
@@ -486,6 +527,24 @@ topology_template:
       requirements:
         - virtual_binding: loadBalancerServer
 
+    dynamicMgExt1ICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for MG External Networks
+      requirements:
+        - virtual_binding: mgServer
+
+    dynamicMgExt2ICP:
+      type: tosca.nodes.nfv.ICP
+      properties:
+        layer_protocol: ipv4
+        role: leaf
+        description: Internal Connection point for MG External Networks
+      requirements:
+        - virtual_binding: mgServer
+
     oamManagementECP:
       type: tosca.nodes.nfv.ECP
       properties:
@@ -604,6 +663,257 @@ topology_template:
         layer_protocol: ipv4
       requirements:
         - internal_connection_point: dynamicLbExt2ICP
+    mgWorkingExt1ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgProtectExt1ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgWorkingExt2ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgProtectExt2ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgWorkingExt3ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgProtectExt3ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgWorkingExt4ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgProtectExt4ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgWorkingExt5ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgProtectExt5ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgWorkingExt6ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgProtectExt6ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgWorkingExt7ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgProtectExt7ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgWorkingExt8ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgProtectExt8ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgWorkingExt9ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgProtectExt9ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgWorkingExt10ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgProtectExt10ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgWorkingExt11ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgProtectExt11ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgWorkingExt12ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgProtectExt12ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgWorkingExt13ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgProtectExt13ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgWorkingExt14ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgProtectExt14ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgWorkingExt15ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgProtectExt15ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgWorkingExt16ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgProtectExt16ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgWorkingExt17ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgProtectExt17ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt1ICP
+
+    mgWorkingExt18ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
+
+    mgProtectExt18ECP:
+      type: tosca.nodes.nfv.ECP
+      properties:
+        layer_protocol: ipv4
+      requirements:
+        - internal_connection_point: dynamicMgExt2ICP
 
   groups:
     loadBalancerScalingGroup:
@@ -660,22 +970,22 @@ topology_template:
               oamServer:
                 - heatResource: oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamServerInstance
                   connectionPoints:
-                    oamControlSwitchFabricICP: oamAControlSwitchFabricPort
+                    oamControlSwitchFabricICP: oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamControlSwitchFabricPort
                   externalConnectionPoints:
                     oamManagementECP:
                       - oamAspectGroup.0.OAMActive.oamInstanceGroup.0.oamManagementPort
-                  virtualStorages:
-                    compactFlash1: oamACompactFlash1
-                    compactFlash2: oamACompactFlash2
+                #  virtualStorages:
+                #    compactFlash1: oamACompactFlash1
+                #    compactFlash2: oamACompactFlash2
                 - heatResource: oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamServerInstance
                   connectionPoints:
-                    oamControlSwitchFabricICP: oamBControlSwitchFabricPort
+                    oamControlSwitchFabricICP: oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamControlSwitchFabricPort
                   externalConnectionPoints:
                     oamManagementECP:
                       - oamAspectGroup.0.OAMStandby.oamInstanceGroup.0.oamManagementPort
-                  virtualStorages:
-                    compactFlash1: oamBCompactFlash1
-                    compactFlash2: oamBCompactFlash2
+                #  virtualStorages:
+                #    compactFlash1: oamBCompactFlash1
+                #    compactFlash2: oamBCompactFlash2
 
           aspects:
             loadBalancerAspect:
@@ -701,6 +1011,8 @@ topology_template:
                       mgControlSwitchFabricICP: mgWorking.mgInstanceGroup.0.mgControlSwitchFabricPort
                       mgDataSwitchFabric1ICP: mgWorking.mgInstanceGroup.0.mgDataSwitchFabric1Port
                       mgDataSwitchFabric2ICP: mgWorking.mgInstanceGroup.0.mgDataSwitchFabric2Port
+                      dynamicMgExt1ICP: mgWorking.mgInstanceGroup.0.mgExt1Port
+                      dynamicMgExt2ICP: mgWorking.mgInstanceGroup.0.mgExt2Port
 
                   - heatResource: mgProtect.mgInstanceGroup.0.mgServerInstance
                     connectionPoints:
@@ -708,3 +1020,5 @@ topology_template:
                       mgControlSwitchFabricICP: mgProtect.mgInstanceGroup.0.mgControlSwitchFabricPort
                       mgDataSwitchFabric1ICP: mgProtect.mgInstanceGroup.0.mgDataSwitchFabric1Port
                       mgDataSwitchFabric2ICP: mgProtect.mgInstanceGroup.0.mgDataSwitchFabric2Port
+                      dynamicMgExt1ICP: mgProtect.mgInstanceGroup.0.mgExt1Port
+                      dynamicMgExt2ICP: mgProtect.mgInstanceGroup.0.mgExt2Port

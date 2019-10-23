@@ -1,0 +1,418 @@
+{
+  "vims" : [ {
+    "interfaceInfo" : {
+      "region" : "regionOne"
+    },
+    "id" : "vim_id",
+    "accessInfo" : {
+      "password" : "changeme",
+      "username" : "CMG1UPF",
+      "tenant" : "VIL-CMG1UPF"
+    },
+    "interfaceEndpoint" : "https://10.95.70.16:13000/v2.0"
+  } ],
+  "flavourId" : "scalable",
+  "instantiationLevelId" : "minimum",
+  "extManagedVirtualLinks" : [ {
+    "virtualLinkDescId" : "dataSwitchFabric1VL",
+    "resourceId" : "CMG1DFab1NetUPF"
+  }, {
+    "virtualLinkDescId" : "dataSwitchFabric2VL",
+    "resourceId" : "CMG1DFab2NetUPF"
+  } ],
+  "extVirtualLinks" : [ {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.10"
+      } ],
+      "cpdId" : "loadBalancerExt1ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.10"
+      } ],
+      "cpdId" : "loadBalancerExt2ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.11"
+      } ],
+      "cpdId" : "loadBalancerExt3ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.11"
+      } ],
+      "cpdId" : "loadBalancerExt4ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.12"
+      } ],
+      "cpdId" : "mgWorkingExt1ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.13"
+      } ],
+      "cpdId" : "mgProtectExt1ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.12"
+      } ],
+      "cpdId" : "mgWorkingExt2ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.13"
+      } ],
+      "cpdId" : "mgProtectExt2ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.14"
+      } ],
+      "cpdId" : "mgWorkingExt3ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.15"
+      } ],
+      "cpdId" : "mgProtectExt3ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.14"
+      } ],
+      "cpdId" : "mgWorkingExt4ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.15"
+      } ],
+      "cpdId" : "mgProtectExt4ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.16"
+      } ],
+      "cpdId" : "mgWorkingExt5ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.17"
+      } ],
+      "cpdId" : "mgProtectExt5ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.16"
+      } ],
+      "cpdId" : "mgWorkingExt6ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.17"
+      } ],
+      "cpdId" : "mgProtectExt6ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.18"
+      } ],
+      "cpdId" : "mgWorkingExt7ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.19"
+      } ],
+      "cpdId" : "mgProtectExt7ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.18"
+      } ],
+      "cpdId" : "mgWorkingExt8ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.19"
+      } ],
+      "cpdId" : "mgProtectExt8ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.20"
+      } ],
+      "cpdId" : "mgWorkingExt9ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.21"
+      } ],
+      "cpdId" : "mgProtectExt9ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.20"
+      } ],
+      "cpdId" : "mgWorkingExt10ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.21"
+      } ],
+      "cpdId" : "mgProtectExt10ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.22"
+      } ],
+      "cpdId" : "mgWorkingExt11ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.23"
+      } ],
+      "cpdId" : "mgProtectExt11ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.22"
+      } ],
+      "cpdId" : "mgWorkingExt12ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.23"
+      } ],
+      "cpdId" : "mgProtectExt12ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.24"
+      } ],
+      "cpdId" : "mgWorkingExt13ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.25"
+      } ],
+      "cpdId" : "mgProtectExt13ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.24"
+      } ],
+      "cpdId" : "mgWorkingExt14ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.25"
+      } ],
+      "cpdId" : "mgProtectExt14ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.26"
+      } ],
+      "cpdId" : "mgWorkingExt15ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.27"
+      } ],
+      "cpdId" : "mgProtectExt15ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.26"
+      } ],
+      "cpdId" : "mgWorkingExt16ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.27"
+      } ],
+      "cpdId" : "mgProtectExt16ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.28"
+      } ],
+      "cpdId" : "mgWorkingExt17ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.68.0.29"
+      } ],
+      "cpdId" : "mgProtectExt17ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet5"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.28"
+      } ],
+      "cpdId" : "mgWorkingExt18ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "notUsed",
+        "ip" : "100.69.0.29"
+      } ],
+      "cpdId" : "mgProtectExt18ECP"
+    } ],
+    "resourceId" : "CMG_Ext_net_flat_physnet6"
+  }, {
+    "extCps" : [ {
+      "addresses" : [ {
+        "subnetId" : "CMG1OAMSECSubNet_BOF_UPF",
+        "ip" : "10.95.20.18"
+      }, {
+        "subnetId" : "CMG1OAMSECSubNet_BOF_UPF",
+        "ip" : "10.95.20.19"
+      } ],
+      "cpdId" : "oamManagementECP"
+    } ],
+    "resourceId" : "CMG1OAMSECNet_BOF_UPF"
+  } ],
+  "grantlessMode" : true,
+  "computeResourceFlavours" : [ {
+    "vnfdVirtualComputeDescId" : "oamCompute",
+    "resourceId" : "Flavor-CMG1-OAM-UPF"
+  }, {
+    "vnfdVirtualComputeDescId" : "mgCompute",
+    "resourceId" : "Flavor-CMG1-MG-UPF"
+  }, {
+    "vnfdVirtualComputeDescId" : "loadBalancerCompute",
+    "resourceId" : "Flavor-CMG1-LB-UPF"
+  } ],
+  "softwareImages" : [ {
+    "vnfdSoftwareImageId" : "cmgImage",
+    "resourceId" : "7e12dc62-b937-4e2a-bb99-aabedfa1e3e3"
+  } ],
+  "zones" : [ {
+    "id" : "workingZones",
+    "resourceId" : "Performance-3"
+  }, {
+    "id" : "protectZones",
+    "resourceId" : "Performance-4"
+  } ]
+}

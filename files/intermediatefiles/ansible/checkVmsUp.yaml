@@ -65,16 +65,6 @@
       ignore_errors: yes
       register: get_license_status
 
-    - name: Configure LB scaled cards during scale-out execution
-      sros_config:
-        timeout: 300
-        provider: "{{ cli }}"
-        lines:
-          - configure card {{ item }} card-type iom-v
-      with_items:
-        - "{{ slotIdsToCheck }}"
-      when: '"lbScaleOutOperation" in resources'
-
     - name: Configure MG scaled cards during scale-out execution
       sros_config:
         timeout: 300
